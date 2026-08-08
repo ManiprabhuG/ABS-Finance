@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getNextSequenceNumber } from '@/lib/ledger-engine';
-import { calculateLTVAndSuggestRate } from '@/lib/ltv-calculator';
-import { getSession } from '@/lib/auth';
+import { requireAuth, requireRole } from '@/lib/api-auth';
+
+// BUG-001 FIX: Use MAX-based ID to avoid duplicates after deletion
+async function getNextLoanNumber(): Promise<string> {
+  const lastLoan = await db.loan.findFirst({ orderBy: { createdAt: 'desc' } });
+  if (!lastLoan) return 'LN-2026-0001';
+
+  const match = lastLoan.loanNumber.match(/(\d+)$/);
+  const lastNum = match ? parseInt(match[1]) : 0;
+  return `LN-2026-${(lastNum + 1).toString().padStart(4, '0')}`;
+}
 
 export async function GET(request: Request) {
   try {
+    const { error } = await requireAuth();
+    if (error) return error;
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const loanType = searchParams.get('type');
@@ -26,10 +37,11 @@ export async function GET(request: Request) {
       include: {
         customer: true,
         mortgageDetail: true,
-        collections: { orderBy: { collectionDate: 'desc' } },
-        ledgerEntries: { orderBy: { date: 'desc' } },
+        // BUG-016 FIX: Select only needed fields, avoid loading all sub-relations
+        _count: { select: { collections: true, ledgerEntries: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500, // Pagination safety limit
     });
 
     return NextResponse.json(loans);
@@ -40,7 +52,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
+    const { session, error } = await requireRole(['SUPER_ADMIN', 'ADMIN', 'LOAN_OFFICER']);
+    if (error) return error;
+
     const data = await request.json();
 
     if (!data.customerId || !data.loanType || !data.principalAmount || !data.interestRate) {
@@ -50,11 +64,22 @@ export async function POST(request: Request) {
       );
     }
 
+    // BUG-005 FIX: Validate numeric inputs
     const principal = parseFloat(data.principalAmount);
     const interestRate = parseFloat(data.interestRate);
     const tenureMonths = parseInt(data.tenureMonths || '12');
 
-    const loanNumber = await getNextSequenceNumber('LN-2026', 'loan');
+    if (isNaN(principal) || principal <= 0) {
+      return NextResponse.json({ error: 'Principal amount must be a positive number' }, { status: 400 });
+    }
+    if (isNaN(interestRate) || interestRate < 0 || interestRate > 100) {
+      return NextResponse.json({ error: 'Interest rate must be between 0 and 100' }, { status: 400 });
+    }
+    if (isNaN(tenureMonths) || tenureMonths <= 0 || tenureMonths > 360) {
+      return NextResponse.json({ error: 'Tenure must be between 1 and 360 months' }, { status: 400 });
+    }
+
+    const loanNumber = await getNextLoanNumber();
 
     const newLoan = await db.$transaction(async (tx) => {
       const loan = await tx.loan.create({
@@ -66,16 +91,18 @@ export async function POST(request: Request) {
           interestType: data.interestType || 'FLAT',
           interestRate,
           tenureMonths,
-          status: 'PENDING', // Created loans start as PENDING until Disbursed
+          status: 'PENDING',
           outstandingBalance: principal,
           notes: data.notes || null,
         },
       });
 
-      // If Mortgage Loan, create Mortgage Details
       if (data.loanType === 'MORTGAGE' && data.assetType && data.assetValue) {
         const estValue = parseFloat(data.assetValue);
         const mktValue = parseFloat(data.marketValue || data.assetValue);
+        if (isNaN(estValue) || estValue <= 0) {
+          throw new Error('Asset value must be a positive number');
+        }
         const ltv = Number(((principal / estValue) * 100).toFixed(2));
 
         await tx.mortgageDetail.create({
@@ -92,8 +119,8 @@ export async function POST(request: Request) {
 
       await tx.auditLog.create({
         data: {
-          userId: session?.id,
-          username: session?.username || 'System',
+          userId: session!.id,
+          username: session!.username,
           action: 'CREATE',
           module: 'LOAN',
           details: `Created ${data.loanType} loan ${loanNumber} of ₹${principal} for customer ID ${data.customerId}`,

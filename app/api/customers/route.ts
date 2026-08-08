@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getNextSequenceNumber } from '@/lib/ledger-engine';
-import { getSession } from '@/lib/auth';
+import { requireAuth, requireRole } from '@/lib/api-auth';
+
+// BUG-001 FIX: MAX-based customer ID
+async function getNextCustomerId(): Promise<string> {
+  const last = await db.customer.findFirst({ orderBy: { createdAt: 'desc' } });
+  if (!last) return 'CUST-0001';
+  const match = last.customerId.match(/(\d+)$/);
+  const lastNum = match ? parseInt(match[1]) : 0;
+  return `CUST-${(lastNum + 1).toString().padStart(4, '0')}`;
+}
 
 export async function GET(request: Request) {
   try {
+    const { error } = await requireAuth();
+    if (error) return error;
+
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q')?.toLowerCase() || '';
 
@@ -21,10 +32,11 @@ export async function GET(request: Request) {
           }
         : undefined,
       include: {
-        loans: true,
-        collections: true,
+        loans: { select: { id: true, loanNumber: true, status: true, principalAmount: true } },
+        _count: { select: { collections: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     return NextResponse.json(customers);
@@ -35,28 +47,42 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
+    const { session, error } = await requireRole(['SUPER_ADMIN', 'ADMIN', 'LOAN_OFFICER']);
+    if (error) return error;
+
     const data = await request.json();
 
+    // BUG-005 FIX: Required field validation
     if (!data.name || !data.mobile || !data.aadhaar) {
       return NextResponse.json({ error: 'Name, Mobile, and Aadhaar are required fields' }, { status: 400 });
     }
 
+    // BUG-005 FIX: Format validation
+    if (!/^\d{10}$/.test(data.mobile)) {
+      return NextResponse.json({ error: 'Mobile number must be exactly 10 digits' }, { status: 400 });
+    }
+    if (!/^\d{12}$/.test(data.aadhaar)) {
+      return NextResponse.json({ error: 'Aadhaar number must be exactly 12 digits' }, { status: 400 });
+    }
+    if (data.pan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(data.pan.toUpperCase())) {
+      return NextResponse.json({ error: 'Invalid PAN format (e.g. ABCDE1234F)' }, { status: 400 });
+    }
+
     // Check duplicate mobile
-    const existing = await db.customer.findUnique({ where: { mobile: data.mobile } });
-    if (existing) {
+    const existingMobile = await db.customer.findUnique({ where: { mobile: data.mobile } });
+    if (existingMobile) {
       return NextResponse.json({ error: 'A customer with this mobile number already exists' }, { status: 400 });
     }
 
-    const customerId = await getNextSequenceNumber('CUST', 'customer');
+    const customerId = await getNextCustomerId();
 
     const customer = await db.customer.create({
       data: {
         customerId,
-        name: data.name,
+        name: data.name.trim(),
         mobile: data.mobile,
         aadhaar: data.aadhaar,
-        pan: data.pan || null,
+        pan: data.pan ? data.pan.toUpperCase() : null,
         address: data.address || '',
         email: data.email || null,
         occupation: data.occupation || null,
@@ -70,8 +96,8 @@ export async function POST(request: Request) {
     // Audit log
     await db.auditLog.create({
       data: {
-        userId: session?.id,
-        username: session?.username || 'System',
+        userId: session!.id,
+        username: session!.username,
         action: 'CREATE',
         module: 'CUSTOMER',
         details: `Created Customer ${customer.name} (${customer.customerId})`,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { requireAuth, requireRole } from '@/lib/api-auth';
 import bcrypt from 'bcryptjs';
 
 export async function GET(
@@ -8,6 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { error } = await requireAuth();
+    if (error) return error;
+
     const { id } = await params;
     const user = await db.user.findUnique({
       where: { id },
@@ -25,9 +28,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Only SUPER_ADMIN can modify user accounts
+    const { session, error } = await requireRole(['SUPER_ADMIN']);
+    if (error) return error;
+
     const { id } = await params;
-    const session = await getSession();
     const data = await request.json();
+
+    if (!data.name || !data.role) {
+      return NextResponse.json({ error: 'Name and Role are required' }, { status: 400 });
+    }
 
     const updateData: any = {
       name: data.name,
@@ -38,6 +48,9 @@ export async function PUT(
     };
 
     if (data.password) {
+      if (data.password.length < 6) {
+        return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+      }
       updateData.passwordHash = await bcrypt.hash(data.password, 10);
     }
 
@@ -48,15 +61,15 @@ export async function PUT(
 
     await db.auditLog.create({
       data: {
-        userId: session?.id,
-        username: session?.username || 'System',
+        userId: session!.id,
+        username: session!.username,
         action: 'UPDATE',
         module: 'USER',
-        details: `Updated user account @${updated.username}`,
+        details: `Updated user account @${updated.username} (Role: ${updated.role}, Status: ${updated.status})`,
       },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ id: updated.id, username: updated.username, name: updated.name, role: updated.role, status: updated.status });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -67,21 +80,30 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Only SUPER_ADMIN can delete users — BUG-015 & BUG-019 FIX
+    const { session, error } = await requireRole(['SUPER_ADMIN']);
+    if (error) return error;
+
     const { id } = await params;
-    const session = await getSession();
+
+    // Cannot delete yourself
+    if (session!.id === id) {
+      return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 });
+    }
 
     const user = await db.user.findUnique({ where: { id } });
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     await db.user.delete({ where: { id } });
 
+    // BUG-019 FIX: Audit log for DELETE
     await db.auditLog.create({
       data: {
-        userId: session?.id,
-        username: session?.username || 'System',
+        userId: session!.id,
+        username: session!.username,
         action: 'DELETE',
         module: 'USER',
-        details: `Deleted user account @${user.username}`,
+        details: `Deleted user account @${user.username} (was ${user.role})`,
       },
     });
 

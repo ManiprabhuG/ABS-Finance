@@ -10,6 +10,7 @@ export default function LoansPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showDisburseModal, setShowDisburseModal] = useState<any | null>(null);
   const [selectedViewLoan, setSelectedViewLoan] = useState<any | null>(null);
@@ -42,20 +43,22 @@ export default function LoansPage() {
 
   const fetchLoans = async () => {
     setLoading(true);
+    setFetchError('');
     try {
       const [loanRes, custRes, accRes] = await Promise.all([
         fetch('/api/loans').then((r) => r.json()),
         fetch('/api/customers').then((r) => r.json()),
         fetch('/api/accounts').then((r) => r.json()),
       ]);
+      if (loanRes.error) throw new Error(loanRes.error);
       if (Array.isArray(loanRes)) setLoans(loanRes);
       if (Array.isArray(custRes)) setCustomers(custRes);
       if (accRes.bankAccounts) {
         setBankAccounts(accRes.bankAccounts);
         if (accRes.bankAccounts.length > 0) setSelectedBankId(accRes.bankAccounts[0].id);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setFetchError(e.message || 'Failed to load data. Please refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -188,6 +191,17 @@ export default function LoansPage() {
           <span>Create Loan Request</span>
         </button>
       </div>
+
+      {/* BUG-009 FIX: Show fetch errors as a visible banner instead of silent console.error */}
+      {fetchError && (
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl px-4 py-3 flex items-center space-x-2 text-rose-400 text-sm">
+            <span className="font-bold">⚠ Error:</span>
+            <span>{fetchError}</span>
+            <button onClick={fetchLoans} className="ml-auto text-xs underline hover:no-underline">Retry</button>
+          </div>
+        </div>
+      )}
 
       {/* Loans Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">

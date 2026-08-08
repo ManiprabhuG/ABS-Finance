@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { requireAuth, requireRole } from '@/lib/api-auth';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { error } = await requireAuth();
+    if (error) return error;
+
     const { id } = await params;
     const customer = await db.customer.findUnique({
       where: { id },
@@ -41,9 +44,22 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { session, error } = await requireRole(['SUPER_ADMIN', 'ADMIN', 'LOAN_OFFICER']);
+    if (error) return error;
+
     const { id } = await params;
-    const session = await getSession();
     const data = await request.json();
+
+    // Input validation
+    if (!data.name || !data.mobile || !data.aadhaar) {
+      return NextResponse.json({ error: 'Name, Mobile, and Aadhaar are required' }, { status: 400 });
+    }
+    if (data.mobile && !/^\d{10}$/.test(data.mobile)) {
+      return NextResponse.json({ error: 'Mobile number must be exactly 10 digits' }, { status: 400 });
+    }
+    if (data.aadhaar && !/^\d{12}$/.test(data.aadhaar)) {
+      return NextResponse.json({ error: 'Aadhaar number must be exactly 12 digits' }, { status: 400 });
+    }
 
     const updated = await db.customer.update({
       where: { id },
@@ -64,8 +80,8 @@ export async function PUT(
 
     await db.auditLog.create({
       data: {
-        userId: session?.id,
-        username: session?.username || 'System',
+        userId: session!.id,
+        username: session!.username,
         action: 'UPDATE',
         module: 'CUSTOMER',
         details: `Updated details for customer ${updated.name} (${updated.customerId})`,
@@ -83,8 +99,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Only SUPER_ADMIN can delete customers
+    const { session, error } = await requireRole(['SUPER_ADMIN']);
+    if (error) return error;
+
     const { id } = await params;
-    const session = await getSession();
 
     const customer = await db.customer.findUnique({ where: { id }, include: { loans: true } });
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -98,10 +117,11 @@ export async function DELETE(
 
     await db.customer.delete({ where: { id } });
 
+    // BUG-019 FIX: Audit log for DELETE
     await db.auditLog.create({
       data: {
-        userId: session?.id,
-        username: session?.username || 'System',
+        userId: session!.id,
+        username: session!.username,
         action: 'DELETE',
         module: 'CUSTOMER',
         details: `Deleted customer ${customer.name} (${customer.customerId})`,

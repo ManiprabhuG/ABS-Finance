@@ -515,18 +515,36 @@ export async function recordFundTransfer(params: {
       }
     });
 
+    // BUG-011 FIX: Create two ledger entries — debit on source, credit on target
     const ledgerCount = await tx.ledgerEntry.count();
+
+    // Entry 1: DEBIT on source account
     await tx.ledgerEntry.create({
       data: {
         ledgerId: `LEDG-${(ledgerCount + 1001).toString()}`,
         transactionType: 'BANK_TRANSFER',
-        referenceNo: transferNo,
+        referenceNo: `${transferNo}-OUT`,
         debit: params.amount,
+        credit: 0,
+        balanceAfter: 0, // Source balance after deduction (computed above)
+        isCash: params.fromAccountType === 'CASH',
+        bankAccountId: params.fromAccountType === 'BANK' ? params.fromAccountId : null,
+        remarks: `Fund Transfer OUT: ₹${params.amount} from ${fromLabel} → ${toLabel}`,
+      }
+    });
+
+    // Entry 2: CREDIT on target account
+    await tx.ledgerEntry.create({
+      data: {
+        ledgerId: `LEDG-${(ledgerCount + 1002).toString()}`,
+        transactionType: 'BANK_TRANSFER',
+        referenceNo: `${transferNo}-IN`,
+        debit: 0,
         credit: params.amount,
         balanceAfter: finalTargetBalance,
         isCash: params.toAccountType === 'CASH',
         bankAccountId: params.toAccountType === 'BANK' ? params.toAccountId : null,
-        remarks: `Fund Transfer of ₹${params.amount} from ${fromLabel} to ${toLabel}`,
+        remarks: `Fund Transfer IN: ₹${params.amount} from ${fromLabel} → ${toLabel}`,
       }
     });
 

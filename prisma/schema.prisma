@@ -28,7 +28,7 @@ model Customer {
   customerId      String       @unique // e.g. CUST-1001
   name            String
   mobile          String       @unique
-  aadhaar         String
+  aadhaar         String       @unique // BUG-006 FIX: Aadhaar must be unique per regulatory compliance
   pan             String?
   address         String
   email           String?
@@ -177,6 +177,8 @@ model LedgerEntry {
   bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
   loan        Loan?        @relation(fields: [loanId], references: [id])
   collection  Collection?  @relation(fields: [collectionId], references: [id])
+  income      Income?      @relation(fields: [incomeId], references: [id]) // BUG-007 FIX
+  expense     Expense?     @relation(fields: [expenseId], references: [id]) // BUG-007 FIX
 }
 
 model Income {
@@ -191,6 +193,8 @@ model Income {
   referenceNo   String?
   remarks       String?
   createdAt     DateTime @default(now())
+
+  ledgerEntries LedgerEntry[] // BUG-007 FIX
 }
 
 model Expense {
@@ -205,6 +209,8 @@ model Expense {
   referenceNo   String?
   remarks       String?
   createdAt     DateTime @default(now())
+
+  ledgerEntries LedgerEntry[] // BUG-007 FIX
 }
 
 model FundTransfer {

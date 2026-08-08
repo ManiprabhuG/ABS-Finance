@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { ShieldCheck, Lock, User, ArrowRight, Building, KeyRound, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
