@@ -28,23 +28,26 @@ export default function FinancePage() {
   const [showBankModal, setShowBankModal] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showEditLedgerModal, setShowEditLedgerModal] = useState(false);
 
   const [selectedViewItem, setSelectedViewItem] = useState<{ type: string; data: any } | null>(null);
   const [editingIncome, setEditingIncome] = useState<any | null>(null);
   const [editingExpense, setEditingExpense] = useState<any | null>(null);
   const [editingBank, setEditingBank] = useState<any | null>(null);
+  const [editingLedger, setEditingLedger] = useState<any | null>(null);
 
-  // Transfer form
+  // Transfer form — 4 Required Fields (amount, fromAccountType, toAccountType, remarks)
   const [transferData, setTransferData] = useState({
     amount: '',
     fromAccountType: 'CASH',
     fromAccountId: '',
     toAccountType: 'BANK',
     toAccountId: '',
+    referenceNo: '',
     remarks: '',
   });
 
-  // Bank form
+  // Bank form — 4 Required Fields (accountName, accountNumber, bankName, ifsc)
   const [bankFormData, setBankFormData] = useState({
     accountName: '',
     accountNumber: '',
@@ -54,13 +57,22 @@ export default function FinancePage() {
     openingBalance: '',
   });
 
-  // Income / Expense form
+  // Income / Expense form — 4 Required Fields (category, amount, paymentMode, remarks)
   const [incExpForm, setIncExpForm] = useState({
     category: 'PROCESSING_FEE',
     amount: '',
     paymentMode: 'CASH',
     bankAccountId: '',
+    referenceNo: '',
     remarks: '',
+  });
+
+  // Ledger edit form
+  const [ledgerEditForm, setLedgerEditForm] = useState({
+    remarks: '',
+    referenceNo: '',
+    debit: '',
+    credit: '',
   });
 
   const fetchData = async () => {
@@ -104,6 +116,40 @@ export default function FinancePage() {
     if (!confirm(`Are you sure you want to delete master ledger entry "${ledgerId}"?`)) return;
     await fetch(`/api/ledger/${id}`, { method: 'DELETE' });
     fetchData();
+  };
+
+  const handleOpenEditLedger = (entry: any) => {
+    setEditingLedger(entry);
+    setLedgerEditForm({
+      remarks: entry.remarks || '',
+      referenceNo: entry.referenceNo || '',
+      debit: entry.debit?.toString() || '0',
+      credit: entry.credit?.toString() || '0',
+    });
+    setShowEditLedgerModal(true);
+  };
+
+  const handleSaveLedgerEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLedger) return;
+    try {
+      const res = await fetch(`/api/ledger/${editingLedger.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ledgerEditForm),
+      });
+
+      if (res.ok) {
+        setShowEditLedgerModal(false);
+        setEditingLedger(null);
+        fetchData();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to update ledger entry');
+      }
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleDeleteIncome = async (id: string, incomeNo: string) => {
@@ -249,53 +295,26 @@ export default function FinancePage() {
             <span className="text-xs font-semibold text-slate-400">Cash In Hand (System Default)</span>
             <Wallet className="w-5 h-5 text-amber-400" />
           </div>
-          <div className="text-2xl font-extrabold mt-2">{formatCurrency(cashBalance)}</div>
-          <div className="text-[11px] text-slate-400 mt-1">Real-time synced cash register</div>
+          <div className="text-2xl font-black mt-2 font-mono text-emerald-400">
+            {formatCurrency(cashBalance)}
+          </div>
         </div>
 
         {bankAccounts.map((b) => (
-          <div key={b.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">{b.bankName}</span>
-                <div className="flex items-center space-x-1">
-                  <button
-                    onClick={() => {
-                      setEditingBank(b);
-                      setBankFormData({
-                        accountName: b.accountName,
-                        accountNumber: b.accountNumber,
-                        bankName: b.bankName,
-                        branch: b.branch,
-                        ifsc: b.ifsc,
-                        openingBalance: b.openingBalance?.toString() || '',
-                      });
-                      setShowBankModal(true);
-                    }}
-                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-amber-600"
-                    title="Edit Bank Account"
-                  >
-                    <Edit className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setPrintModal({ isOpen: true, title: `Bank Statement - ${b.bankName}`, url: `/print/bank-statement/${b.id}` })}
-                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-emerald-600"
-                    title="Print Bank Account Statement"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteBank(b.id, b.bankName)}
-                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-rose-600"
-                    title="Delete Bank Account"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+          <div key={b.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-brand-600 dark:text-brand-400">{b.bankName}</span>
+              <div className="flex items-center space-x-1">
+                <button onClick={() => { setEditingBank(b); setBankFormData({ accountName: b.accountName, accountNumber: b.accountNumber, bankName: b.bankName, branch: b.branch, ifsc: b.ifsc, openingBalance: b.openingBalance.toString() }); setShowBankModal(true); }} className="p-1 text-amber-600 hover:bg-amber-50 rounded">
+                  <Edit className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDeleteBank(b.id, b.bankName)} className="p-1 text-rose-500 hover:bg-rose-50 rounded">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <div className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-2">
-                {formatCurrency(b.currentBalance)}
-              </div>
+            </div>
+            <div className="text-xl font-bold mt-1 font-mono text-slate-900 dark:text-slate-100">
+              {formatCurrency(b.currentBalance)}
             </div>
             <div className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               A/C: {b.accountNumber} | IFSC: {b.ifsc}
@@ -419,6 +438,16 @@ export default function FinancePage() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
+
+                            {/* REQUIREMENT 3 FIX: EDIT ICON ADDED TO CENTRAL MASTER LEDGER TABLE */}
+                            <button
+                              onClick={() => handleOpenEditLedger(l)}
+                              className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/60 text-amber-600 dark:text-amber-400 transition-colors"
+                              title="Edit Ledger Entry"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+
                             <button
                               onClick={() => handleDeleteLedger(l.id, l.ledgerId)}
                               className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 transition-colors"
@@ -444,7 +473,7 @@ export default function FinancePage() {
           <div className="flex justify-end">
             <button
               onClick={() => {
-                setIncExpForm({ category: 'PROCESSING_FEE', amount: '', paymentMode: 'CASH', bankAccountId: '', remarks: '' });
+                setIncExpForm({ category: 'PROCESSING_FEE', amount: '', paymentMode: 'CASH', bankAccountId: '', referenceNo: '', remarks: '' });
                 setShowIncomeModal(true);
               }}
               className="px-4 py-2 bg-emerald-600 text-white font-medium text-xs rounded-xl shadow flex items-center space-x-1"
@@ -453,67 +482,36 @@ export default function FinancePage() {
               <span>Record Income Entry</span>
             </button>
           </div>
+
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 text-xs uppercase">
-                  <th className="p-4">Income No</th>
+                <tr className="bg-slate-50 dark:bg-slate-800/60 border-b text-xs uppercase font-semibold text-slate-500">
+                  <th className="p-4">Income #</th>
                   <th className="p-4">Date</th>
                   <th className="p-4">Category</th>
-                  <th className="p-4">Amount</th>
+                  <th className="p-4">Amount (₹)</th>
                   <th className="p-4">Payment Mode</th>
                   <th className="p-4">Remarks</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {incomes.map((inc) => (
-                  <tr key={inc.id}>
-                    <td className="p-4 font-mono font-bold text-emerald-600">{inc.incomeNo}</td>
-                    <td className="p-4 text-xs text-slate-500">{formatDate(inc.date)}</td>
-                    <td className="p-4 font-semibold text-xs">{inc.category}</td>
-                    <td className="p-4 font-extrabold text-emerald-600">{formatCurrency(inc.amount)}</td>
-                    <td className="p-4 text-xs">{inc.paymentMode}</td>
-                    <td className="p-4 text-xs text-slate-500">{inc.remarks || '-'}</td>
+                {incomes.map((i) => (
+                  <tr key={i.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                    <td className="p-4 font-mono font-bold text-brand-600">{i.incomeNo}</td>
+                    <td className="p-4 text-xs text-slate-500">{formatDate(i.date)}</td>
+                    <td className="p-4 font-semibold text-xs">{i.category}</td>
+                    <td className="p-4 font-bold text-emerald-600">{formatCurrency(i.amount)}</td>
+                    <td className="p-4 text-xs">{i.paymentMode}</td>
+                    <td className="p-4 text-xs text-slate-500">{i.remarks || '-'}</td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end space-x-1">
-                        <button
-                          onClick={() => setSelectedViewItem({ type: 'Income Record', data: inc })}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-brand-600 dark:text-brand-400 transition-colors"
-                          title="View Income Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingIncome(inc);
-                            setIncExpForm({
-                              category: inc.category,
-                              amount: inc.amount?.toString() || '',
-                              paymentMode: inc.paymentMode || 'CASH',
-                              bankAccountId: inc.bankAccountId || '',
-                              remarks: inc.remarks || '',
-                            });
-                            setShowIncomeModal(true);
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/60 text-amber-600 dark:text-amber-400 transition-colors"
-                          title="Edit Income"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteIncome(inc.id, inc.incomeNo)}
-                          className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 transition-colors"
-                          title="Delete Income"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setPrintModal({ isOpen: true, title: `Income Voucher - ${inc.incomeNo}`, url: `/print/income-voucher/${inc.id}` })}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-emerald-600 dark:text-emerald-400 transition-colors"
-                          title="Print Income Voucher"
-                        >
+                        <button onClick={() => setPrintModal({ isOpen: true, title: `Income Voucher - ${i.incomeNo}`, url: `/print/income-voucher/${i.id}` })} className="p-1.5 text-emerald-600 hover:bg-slate-100 rounded">
                           <Printer className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDeleteIncome(i.id, i.incomeNo)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded">
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -531,8 +529,7 @@ export default function FinancePage() {
           <div className="flex justify-end">
             <button
               onClick={() => {
-                setEditingExpense(null);
-                setIncExpForm({ category: 'OFFICE_RENT', amount: '', paymentMode: 'CASH', bankAccountId: '', remarks: '' });
+                setIncExpForm({ category: 'OFFICE_RENT', amount: '', paymentMode: 'CASH', bankAccountId: '', referenceNo: '', remarks: '' });
                 setShowExpenseModal(true);
               }}
               className="px-4 py-2 bg-rose-600 text-white font-medium text-xs rounded-xl shadow flex items-center space-x-1"
@@ -541,67 +538,36 @@ export default function FinancePage() {
               <span>Record Expense Entry</span>
             </button>
           </div>
+
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 text-xs uppercase">
-                  <th className="p-4">Expense No</th>
+                <tr className="bg-slate-50 dark:bg-slate-800/60 border-b text-xs uppercase font-semibold text-slate-500">
+                  <th className="p-4">Expense #</th>
                   <th className="p-4">Date</th>
                   <th className="p-4">Category</th>
-                  <th className="p-4">Amount</th>
+                  <th className="p-4">Amount (₹)</th>
                   <th className="p-4">Payment Mode</th>
                   <th className="p-4">Remarks</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {expenses.map((exp) => (
-                  <tr key={exp.id}>
-                    <td className="p-4 font-mono font-bold text-rose-600">{exp.expenseNo}</td>
-                    <td className="p-4 text-xs text-slate-500">{formatDate(exp.date)}</td>
-                    <td className="p-4 font-semibold text-xs">{exp.category}</td>
-                    <td className="p-4 font-extrabold text-rose-600">{formatCurrency(exp.amount)}</td>
-                    <td className="p-4 text-xs">{exp.paymentMode}</td>
-                    <td className="p-4 text-xs text-slate-500">{exp.remarks || '-'}</td>
+                {expenses.map((e) => (
+                  <tr key={e.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                    <td className="p-4 font-mono font-bold text-brand-600">{e.expenseNo}</td>
+                    <td className="p-4 text-xs text-slate-500">{formatDate(e.date)}</td>
+                    <td className="p-4 font-semibold text-xs">{e.category}</td>
+                    <td className="p-4 font-bold text-rose-600">{formatCurrency(e.amount)}</td>
+                    <td className="p-4 text-xs">{e.paymentMode}</td>
+                    <td className="p-4 text-xs text-slate-500">{e.remarks || '-'}</td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end space-x-1">
-                        <button
-                          onClick={() => setSelectedViewItem({ type: 'Expense Record', data: exp })}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-brand-600 dark:text-brand-400 transition-colors"
-                          title="View Expense Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingExpense(exp);
-                            setIncExpForm({
-                              category: exp.category,
-                              amount: exp.amount?.toString() || '',
-                              paymentMode: exp.paymentMode || 'CASH',
-                              bankAccountId: exp.bankAccountId || '',
-                              remarks: exp.remarks || '',
-                            });
-                            setShowExpenseModal(true);
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/60 text-amber-600 dark:text-amber-400 transition-colors"
-                          title="Edit Expense"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteExpense(exp.id, exp.expenseNo)}
-                          className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 transition-colors"
-                          title="Delete Expense"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setPrintModal({ isOpen: true, title: `Expense Voucher - ${exp.expenseNo}`, url: `/print/expense-voucher/${exp.id}` })}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-rose-600 dark:text-rose-400 transition-colors"
-                          title="Print Expense Voucher"
-                        >
+                        <button onClick={() => setPrintModal({ isOpen: true, title: `Expense Voucher - ${e.expenseNo}`, url: `/print/expense-voucher/${e.id}` })} className="p-1.5 text-rose-600 hover:bg-slate-100 rounded">
                           <Printer className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDeleteExpense(e.id, e.expenseNo)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded">
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -613,237 +579,176 @@ export default function FinancePage() {
         </div>
       )}
 
-      {/* Fund Transfer Modal */}
+      {/* EDIT LEDGER ENTRY MODAL */}
+      {showEditLedgerModal && editingLedger && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                Edit Master Ledger Entry: {editingLedger.ledgerId}
+              </h3>
+              <button onClick={() => setShowEditLedgerModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLedgerEdit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">Debit Amount (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={ledgerEditForm.debit}
+                  onChange={(e) => setLedgerEditForm({ ...ledgerEditForm, debit: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-mono font-bold text-rose-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">Credit Amount (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={ledgerEditForm.credit}
+                  onChange={(e) => setLedgerEditForm({ ...ledgerEditForm, credit: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-mono font-bold text-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">Reference Number</label>
+                <input
+                  type="text"
+                  value={ledgerEditForm.referenceNo}
+                  onChange={(e) => setLedgerEditForm({ ...ledgerEditForm, referenceNo: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">Remarks / Audit Note * (Req #1)</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={ledgerEditForm.remarks}
+                  onChange={(e) => setLedgerEditForm({ ...ledgerEditForm, remarks: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onClick={() => setShowEditLedgerModal(false)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium">
+                  Cancel
+                </button>
+                <button type="submit" className="px-5 py-2 bg-brand-600 text-white rounded-xl font-semibold shadow">
+                  Update Ledger Entry
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Fund Transfer Modal — 4 REQUIRED FIELDS */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
-                <ArrowLeftRight className="w-5 h-5 text-brand-600" /> Internal Fund Transfer
+                <ArrowLeftRight className="w-5 h-5 text-brand-600" /> Execute Inter-Account Fund Transfer
               </h3>
               <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleFundTransfer} className="space-y-4 text-sm">
+            <form onSubmit={handleFundTransfer} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-semibold mb-1">Transfer Amount (₹) *</label>
+                <label className="block font-semibold mb-1">Transfer Amount (₹) * (Req #1)</label>
                 <input
                   type="number"
                   required
+                  placeholder="₹ Amount"
                   value={transferData.amount}
                   onChange={(e) => setTransferData({ ...transferData, amount: e.target.value })}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold text-lg"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold mb-1">From Source *</label>
-                  <select
-                    value={transferData.fromAccountType}
-                    onChange={(e) => setTransferData({ ...transferData, fromAccountType: e.target.value as any })}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
-                  >
-                    <option value="CASH">Cash In Hand</option>
-                    <option value="BANK">Bank Account</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold mb-1">To Destination *</label>
-                  <select
-                    value={transferData.toAccountType}
-                    onChange={(e) => setTransferData({ ...transferData, toAccountType: e.target.value as any })}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
-                  >
-                    <option value="BANK">Bank Account</option>
-                    <option value="CASH">Cash In Hand</option>
-                  </select>
-                </div>
-              </div>
-
-              {transferData.fromAccountType === 'BANK' && (
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-1">Source Bank Account</label>
-                  <select
-                    value={transferData.fromAccountId}
-                    onChange={(e) => setTransferData({ ...transferData, fromAccountId: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs"
-                  >
-                    {bankAccounts.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.bankName} ({b.accountNumber.slice(-4)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {transferData.toAccountType === 'BANK' && (
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-1">Target Bank Account</label>
-                  <select
-                    value={transferData.toAccountId}
-                    onChange={(e) => setTransferData({ ...transferData, toAccountId: e.target.value })}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs"
-                  >
-                    {bankAccounts.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.bankName} ({b.accountNumber.slice(-4)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowTransferModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-medium shadow-md"
-                >
-                  Execute Fund Transfer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Bank Modal */}
-      {showBankModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
-                <Building className="w-5 h-5 text-brand-600" /> Add Bank Account
-              </h3>
-              <button onClick={() => setShowBankModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddBank} className="space-y-3 text-sm">
-              <input
-                type="text"
-                required
-                placeholder="Account Holder Name"
-                value={bankFormData.accountName}
-                onChange={(e) => setBankFormData({ ...bankFormData, accountName: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
-              />
-              <input
-                type="text"
-                required
-                placeholder="Account Number"
-                value={bankFormData.accountNumber}
-                onChange={(e) => setBankFormData({ ...bankFormData, accountNumber: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  required
-                  placeholder="Bank Name (e.g. HDFC)"
-                  value={bankFormData.bankName}
-                  onChange={(e) => setBankFormData({ ...bankFormData, bankName: e.target.value })}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
-                />
-                <input
-                  type="text"
-                  required
-                  placeholder="IFSC Code"
-                  value={bankFormData.ifsc}
-                  onChange={(e) => setBankFormData({ ...bankFormData, ifsc: e.target.value })}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
-                />
-              </div>
-              <input
-                type="number"
-                placeholder="Opening Balance (₹)"
-                value={bankFormData.openingBalance}
-                onChange={(e) => setBankFormData({ ...bankFormData, openingBalance: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold"
-              />
-
-              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowBankModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-medium shadow-md"
-                >
-                  Save Bank Account
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Record Income Modal */}
-      {showIncomeModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-emerald-600" /> Record Income Entry
-              </h3>
-              <button onClick={() => setShowIncomeModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveIncome} className="space-y-3 text-sm">
-              <div>
-                <label className="block text-xs font-semibold mb-1">Income Category *</label>
-                <select
-                  value={incExpForm.category}
-                  onChange={(e) => setIncExpForm({ ...incExpForm, category: e.target.value })}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold"
-                >
-                  <option value="PROCESSING_FEE">Processing Fee</option>
-                  <option value="DOCUMENTATION_FEE">Documentation Fee</option>
-                  <option value="SERVICE_CHARGE">Service Charges</option>
-                  <option value="OTHER">Other Income</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">Amount (₹) *</label>
-                <input
-                  type="number"
-                  required
-                  value={incExpForm.amount}
-                  onChange={(e) => setIncExpForm({ ...incExpForm, amount: e.target.value })}
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold text-emerald-600"
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowIncomeModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 font-medium"
+              <div>
+                <label className="block font-semibold mb-1">From Source Account * (Req #2)</label>
+                <select
+                  required
+                  value={transferData.fromAccountType}
+                  onChange={(e) => setTransferData({ ...transferData, fromAccountType: e.target.value as any })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
                 >
+                  <option value="CASH">Cash In Hand (Available: ₹{cashBalance.toLocaleString()})</option>
+                  <option value="BANK">Bank Account</option>
+                </select>
+              </div>
+
+              {transferData.fromAccountType === 'BANK' && (
+                <div>
+                  <label className="block font-semibold mb-1">Select Source Bank</label>
+                  <select
+                    value={transferData.fromAccountId}
+                    onChange={(e) => setTransferData({ ...transferData, fromAccountId: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
+                  >
+                    {bankAccounts.map((b) => (
+                      <option key={b.id} value={b.id}>{b.bankName} (₹{b.currentBalance.toLocaleString()})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold mb-1">To Destination Account * (Req #3)</label>
+                <select
+                  required
+                  value={transferData.toAccountType}
+                  onChange={(e) => setTransferData({ ...transferData, toAccountType: e.target.value as any })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
+                >
+                  <option value="BANK">Bank Account</option>
+                  <option value="CASH">Cash In Hand</option>
+                </select>
+              </div>
+
+              {transferData.toAccountType === 'BANK' && (
+                <div>
+                  <label className="block font-semibold mb-1">Select Target Bank</label>
+                  <select
+                    value={transferData.toAccountId}
+                    onChange={(e) => setTransferData({ ...transferData, toAccountId: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
+                  >
+                    {bankAccounts.map((b) => (
+                      <option key={b.id} value={b.id}>{b.bankName} ({b.accountNumber.slice(-4)})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold mb-1">Transfer Remarks * (Req #4)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Reason for transfer"
+                  value={transferData.remarks}
+                  onChange={(e) => setTransferData({ ...transferData, remarks: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onClick={() => setShowTransferModal(false)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-md"
-                >
-                  Post Income to Ledger
+                <button type="submit" className="px-5 py-2 bg-brand-600 text-white rounded-xl font-semibold shadow">
+                  Execute Transfer
                 </button>
               </div>
             </form>
@@ -851,100 +756,77 @@ export default function FinancePage() {
         </div>
       )}
 
-      {/* Record Expense Modal */}
-      {showExpenseModal && (
+      {/* Income / Expense Modal — 4 REQUIRED FIELDS */}
+      {(showIncomeModal || showExpenseModal) && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
-                <TrendingDown className="w-5 h-5 text-rose-600" /> Record Expense Entry
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                {showIncomeModal ? 'Record Income Entry' : 'Record Expense Entry'}
               </h3>
-              <button onClick={() => setShowExpenseModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setShowIncomeModal(false); setShowExpenseModal(false); }} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveExpense} className="space-y-3 text-sm">
+            <form onSubmit={showIncomeModal ? handleSaveIncome : handleSaveExpense} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-semibold mb-1">Expense Category *</label>
-                <select
+                <label className="block font-semibold mb-1">Category * (Req #1)</label>
+                <input
+                  type="text"
+                  required
                   value={incExpForm.category}
                   onChange={(e) => setIncExpForm({ ...incExpForm, category: e.target.value })}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold"
-                >
-                  <option value="OFFICE_RENT">Office Rent</option>
-                  <option value="SALARY">Employee Salary</option>
-                  <option value="ELECTRICITY">Electricity & Utilities</option>
-                  <option value="MAINTENANCE">Maintenance</option>
-                  <option value="MISC">Misc Expenses</option>
-                </select>
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
+                />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold mb-1">Amount (₹) *</label>
+                <label className="block font-semibold mb-1">Amount (₹) * (Req #2)</label>
                 <input
                   type="number"
                   required
                   value={incExpForm.amount}
                   onChange={(e) => setIncExpForm({ ...incExpForm, amount: e.target.value })}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold text-rose-600"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold"
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowExpenseModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 font-medium"
+              <div>
+                <label className="block font-semibold mb-1">Payment Mode * (Req #3)</label>
+                <select
+                  required
+                  value={incExpForm.paymentMode}
+                  onChange={(e) => setIncExpForm({ ...incExpForm, paymentMode: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
                 >
+                  <option value="CASH">CASH</option>
+                  <option value="BANK_TRANSFER">BANK_TRANSFER</option>
+                  <option value="UPI">UPI</option>
+                  <option value="CHEQUE">CHEQUE</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">Remarks / Voucher Note * (Req #4)</label>
+                <input
+                  type="text"
+                  required
+                  value={incExpForm.remarks}
+                  onChange={(e) => setIncExpForm({ ...incExpForm, remarks: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onClick={() => { setShowIncomeModal(false); setShowExpenseModal(false); }} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-medium shadow-md"
-                >
-                  Post Expense to Ledger
+                <button type="submit" className="px-5 py-2 bg-brand-600 text-white rounded-xl font-semibold shadow">
+                  Save Entry
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Item Details View Modal */}
-      {selectedViewItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-brand-600" /> {selectedViewItem.type} Details
-              </h3>
-              <button onClick={() => setSelectedViewItem(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-1.5 font-mono">
-                {Object.entries(selectedViewItem.data).map(([key, val]) => {
-                  if (typeof val === 'object' && val !== null) return null;
-                  return (
-                    <div key={key} className="flex justify-between">
-                      <span className="text-slate-400 capitalize">{key}:</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200">{String(val)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  onClick={() => setSelectedViewItem(null)}
-                  className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium text-xs shadow"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -952,7 +834,7 @@ export default function FinancePage() {
       {/* Print Preview Modal */}
       <PrintPreviewModal
         isOpen={printModal.isOpen}
-        onClose={() => setPrintModal({ ...printModal, isOpen: false })}
+        onClose={() => setPrintModal({ isOpen: false, title: '', url: '' })}
         title={printModal.title}
         printUrl={printModal.url}
       />

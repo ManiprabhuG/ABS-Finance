@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Printer, Download, ArrowLeft, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Printer, Download, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface PrintToolbarProps {
@@ -10,6 +10,21 @@ interface PrintToolbarProps {
 
 export function PrintToolbar({ documentTitle }: PrintToolbarProps) {
   const router = useRouter();
+  const [inIframe, setInIframe] = useState(false);
+
+  useEffect(() => {
+    // Check if page is rendered inside an iframe (e.g. inside PrintPreviewModal)
+    if (typeof window !== 'undefined') {
+      try {
+        setInIframe(window.self !== window.top);
+      } catch {
+        setInIframe(true);
+      }
+    }
+  }, []);
+
+  // If inside PrintPreviewModal iframe, do not render duplicate toolbar
+  if (inIframe) return null;
 
   const handlePrint = () => {
     window.print();

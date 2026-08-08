@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { requireAuth, requireRole } from '@/lib/api-auth';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { error } = await requireAuth();
+    if (error) return error;
+
     const { id } = await params;
     const entry = await db.ledgerEntry.findUnique({
       where: { id },
@@ -25,25 +28,33 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { session, error } = await requireRole(['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT']);
+    if (error) return error;
+
     const { id } = await params;
-    const session = await getSession();
     const data = await request.json();
+
+    const existing = await db.ledgerEntry.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: 'Ledger entry not found' }, { status: 404 });
+
+    const updateData: any = {};
+    if (data.remarks !== undefined) updateData.remarks = data.remarks;
+    if (data.referenceNo !== undefined) updateData.referenceNo = data.referenceNo || null;
+    if (data.debit !== undefined) updateData.debit = parseFloat(data.debit || '0');
+    if (data.credit !== undefined) updateData.credit = parseFloat(data.credit || '0');
 
     const updated = await db.ledgerEntry.update({
       where: { id },
-      data: {
-        remarks: data.remarks,
-        referenceNo: data.referenceNo || undefined,
-      },
+      data: updateData,
     });
 
     await db.auditLog.create({
       data: {
-        userId: session?.id,
-        username: session?.username || 'System',
+        userId: session!.id,
+        username: session!.username,
         action: 'UPDATE',
         module: 'FINANCE',
-        details: `Updated ledger entry ${updated.ledgerId}`,
+        details: `Updated master ledger entry ${updated.ledgerId}`,
       },
     });
 
@@ -58,8 +69,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { session, error } = await requireRole(['SUPER_ADMIN', 'ADMIN']);
+    if (error) return error;
+
     const { id } = await params;
-    const session = await getSession();
 
     const entry = await db.ledgerEntry.findUnique({ where: { id } });
     if (!entry) return NextResponse.json({ error: 'Ledger entry not found' }, { status: 404 });
@@ -68,11 +81,11 @@ export async function DELETE(
 
     await db.auditLog.create({
       data: {
-        userId: session?.id,
-        username: session?.username || 'System',
+        userId: session!.id,
+        username: session!.username,
         action: 'DELETE',
         module: 'FINANCE',
-        details: `Deleted ledger entry ${entry.ledgerId}`,
+        details: `Deleted master ledger entry ${entry.ledgerId}`,
       },
     });
 

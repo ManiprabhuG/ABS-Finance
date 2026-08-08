@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { requireAuth, requireRole } from '@/lib/api-auth';
 
 export async function GET() {
   try {
@@ -9,7 +9,8 @@ export async function GET() {
       settings = await db.systemSettings.create({
         data: {
           id: 'default-settings',
-          companyName: 'ABS Finance Management Software',
+          companyName: 'ABS Finance Management Ltd.',
+          logoUrl: '/logo.png',
         },
       });
     }
@@ -21,13 +22,16 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const session = await getSession();
+    const { session, error } = await requireRole(['SUPER_ADMIN', 'ADMIN']);
+    if (error) return error;
+
     const data = await request.json();
 
     const updated = await db.systemSettings.upsert({
       where: { id: 'default-settings' },
       update: {
         companyName: data.companyName,
+        logoUrl: data.logoUrl || '/logo.png',
         address: data.address,
         gstNumber: data.gstNumber,
         contactPhone: data.contactPhone,
@@ -41,17 +45,18 @@ export async function PUT(request: Request) {
       },
       create: {
         id: 'default-settings',
-        companyName: data.companyName || 'ABS Finance Management Software',
+        companyName: data.companyName || 'ABS Finance Management Ltd.',
+        logoUrl: data.logoUrl || '/logo.png',
       },
     });
 
     await db.auditLog.create({
       data: {
-        userId: session?.id,
-        username: session?.username || 'System',
+        userId: session!.id,
+        username: session!.username,
         action: 'UPDATE',
         module: 'SETTINGS',
-        details: 'Updated System Settings',
+        details: 'Updated System Settings & Company Profile',
       },
     });
 
