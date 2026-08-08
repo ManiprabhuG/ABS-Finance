@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  passwordHash String
+  name         String
+  email        String?
+  role         String     @default("ADMIN") // SUPER_ADMIN, ADMIN, ACCOUNTANT, COLLECTION_OFFICER, LOAN_OFFICER, VIEWER
+  branch       String     @default("Main Branch")
+  status       String     @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  collectionsRecorded Collection[]
+  auditLogs           AuditLog[]
+}
+
+model Customer {
+  id              String       @id @default(uuid())
+  customerId      String       @unique // e.g. CUST-1001
+  name            String
+  mobile          String       @unique
+  aadhaar         String
+  pan             String?
+  address         String
+  email           String?
+  occupation      String?
+  nomineeName     String?
+  nomineeRelation String?
+  nomineeMobile   String?
+  photoUrl        String?
+  remarks         String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  loans       Loan[]
+  collections Collection[]
+  documents   Document[]
+}
+
+model Loan {
+  id                 String          @id @default(uuid())
+  loanNumber         String          @unique // e.g. LN-2026-001
+  customerId         String
+  loanType           String          // MORTGAGE, NORMAL, CUSTOM
+  principalAmount    Float
+  interestType       String          @default("FLAT") // FLAT, REDUCING, MANUAL
+  interestRate       Float           // Annual %
+  tenureMonths       Int             @default(12)
+  loanDate           DateTime        @default(now())
+  status             String          @default("PENDING") // PENDING, APPROVED, DISBURSED, ACTIVE, OVERDUE, CLOSED, REJECTED
+  outstandingBalance Float
+  disbursedFrom      String?         // CASH or BANK
+  bankAccountId      String?
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  mortgageDetail MortgageDetail?
+  collections    Collection[]
+  ledgerEntries  LedgerEntry[]
+  documents      Document[]
+}
+
+model MortgageDetail {
+  id               String   @id @default(uuid())
+  loanId           String   @unique
+  assetType        String   // PROPERTY, GOLD, VEHICLE, SHARES, OTHER
+  assetDescription String
+  estimatedValue   Float
+  marketValue      Float
+  ltvPercentage    Float
+  documentUrls     String?  // JSON array string
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+}
+
+model InterestSlab {
+  id           String   @id @default(uuid())
+  name         String
+  fromAmount   Float
+  toAmount     Float
+  interestRate Float
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model LTVInterestSlab {
+  id           String   @id @default(uuid())
+  ltvRange     String   // e.g. "0-40%"
+  minLtv       Float
+  maxLtv       Float
+  interestRate Float
+  loanCategory String   @default("MORTGAGE")
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Collection {
+  id             String   @id @default(uuid())
+  collectionId   String   @unique // e.g. COL-1001
+  loanId         String
+  customerId     String
+  collectionDate DateTime @default(now())
+  amountReceived Float
+  principalPaid  Float
+  interestPaid   Float
+  penaltyPaid    Float    @default(0)
+  paymentMode    String   // CASH, BANK_TRANSFER, UPI, CHEQUE
+  bankAccountId  String?
+  referenceNo    String?
+  recordedById   String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  loan       Loan        @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  recordedBy User?       @relation(fields: [recordedById], references: [id])
+  ledgerEntries LedgerEntry[]
+}
+
+model BankAccount {
+  id             String   @id @default(uuid())
+  accountName    String
+  accountNumber  String   @unique
+  bankName       String
+  branch         String
+  ifsc           String
+  openingBalance Float
+  currentBalance Float
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ledgerEntries LedgerEntry[]
+}
+
+model CashAccount {
+  id             String   @id @default("cash-master")
+  name           String   @default("Cash In Hand")
+  currentBalance Float    @default(0)
+  updatedAt      DateTime @updatedAt
+}
+
+model LedgerEntry {
+  id              String   @id @default(uuid())
+  ledgerId        String   @unique // e.g. LEDG-10001
+  date            DateTime @default(now())
+  transactionType String   // DISBURSEMENT, COLLECTION, INCOME, EXPENSE, BANK_TRANSFER, ADJUSTMENT
+  referenceNo     String?
+  debit           Float    @default(0)
+  credit          Float    @default(0)
+  balanceAfter    Float
+  bankAccountId   String?
+  isCash          Boolean  @default(false)
+  remarks         String
+  loanId          String?
+  collectionId    String?
+  incomeId        String?
+  expenseId       String?
+  createdAt       DateTime @default(now())
+
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
+  loan        Loan?        @relation(fields: [loanId], references: [id])
+  collection  Collection?  @relation(fields: [collectionId], references: [id])
+}
+
+model Income {
+  id            String   @id @default(uuid())
+  incomeNo      String   @unique // e.g. INC-1001
+  category      String   // PROCESSING_FEE, DOCUMENTATION_FEE, SERVICE_CHARGE, OTHER
+  amount        Float
+  date          DateTime @default(now())
+  paymentMode   String   // CASH, BANK_TRANSFER, UPI, CHEQUE
+  bankAccountId String?
+  isCash        Boolean  @default(true)
+  referenceNo   String?
+  remarks       String?
+  createdAt     DateTime @default(now())
+}
+
+model Expense {
+  id            String   @id @default(uuid())
+  expenseNo     String   @unique // e.g. EXP-1001
+  category      String   // OFFICE_RENT, SALARY, ELECTRICITY, MAINTENANCE, MISC
+  amount        Float
+  date          DateTime @default(now())
+  paymentMode   String   // CASH, BANK_TRANSFER, UPI, CHEQUE
+  bankAccountId String?
+  isCash        Boolean  @default(true)
+  referenceNo   String?
+  remarks       String?
+  createdAt     DateTime @default(now())
+}
+
+model FundTransfer {
+  id              String   @id @default(uuid())
+  transferNo      String   @unique // e.g. TRSF-1001
+  date            DateTime @default(now())
+  amount          Float
+  fromAccountType String   // BANK or CASH
+  fromAccountId   String?  // Bank Account ID if BANK
+  toAccountType   String   // BANK or CASH
+  toAccountId     String?  // Bank Account ID if BANK
+  referenceNo     String?
+  remarks         String?
+  createdAt       DateTime @default(now())
+}
+
+model Document {
+  id         String   @id @default(uuid())
+  title      String
+  category   String   // AADHAAR, PAN, PROPERTY_DOC, LOAN_AGREEMENT, MORTGAGE_DOC, PHOTO, OTHER
+  fileUrl    String
+  customerId String?
+  loanId     String?
+  createdAt  DateTime @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id])
+  loan     Loan?     @relation(fields: [loanId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  username  String
+  action    String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, APPROVE, DISBURSE
+  module    String   // CUSTOMER, LOAN, COLLECTION, FINANCE, SETTINGS, USER
+  details   String
+  ipAddress String   @default("127.0.0.1")
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model SystemSettings {
+  id               String @id @default("default-settings")
+  companyName      String @default("ABS Finance Management Ltd.")
+  logoUrl          String @default("/logo.png")
+  address          String @default("123 Financial District, Tech City")
+  gstNumber        String @default("33AAAAA0000A1Z5")
+  contactPhone     String @default("+91 98765 43210")
+  contactEmail     String @default("contact@absfinance.com")
+  loanPrefix       String @default("LN")
+  receiptPrefix    String @default("REC")
+  defaultPenalty   Float  @default(2.0)
+  gracePeriodDays  Int    @default(5)
+  financialYear    String @default("2026-2027")
+  currencySymbol   String @default("₹")
+}
