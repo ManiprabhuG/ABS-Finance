@@ -1,7 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, Eye, Edit, Trash2, Phone, FileText, UserCheck, CheckCircle, X, Printer } from 'lucide-react';
+import {
+  Users,
+  Plus,
+  Search,
+  Eye,
+  Edit,
+  Trash2,
+  Phone,
+  FileText,
+  UserCheck,
+  CheckCircle,
+  X,
+  Printer,
+  Camera,
+  Image as ImageIcon,
+  ShieldCheck,
+} from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/export-utils';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
 
@@ -17,6 +33,10 @@ export default function CustomersPage() {
     url: '',
   });
 
+  // Proof Documents Array State for Customer Form
+  const [proofs, setProofs] = useState<Array<{ title: string; category: string; fileUrl: string }>>([]);
+  const [showProofFields, setShowProofFields] = useState(false);
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -30,6 +50,7 @@ export default function CustomersPage() {
     nomineeRelation: '',
     nomineeMobile: '',
     remarks: '',
+    photoUrl: '',
   });
 
   const fetchCustomers = async () => {
@@ -65,8 +86,28 @@ export default function CustomersPage() {
       nomineeRelation: customer.nomineeRelation || '',
       nomineeMobile: customer.nomineeMobile || '',
       remarks: customer.remarks || '',
+      photoUrl: customer.photoUrl || '',
     });
+    setProofs([]);
+    setShowProofFields(false);
     setShowModal(true);
+  };
+
+  const handleAddProofField = () => {
+    setShowProofFields(true);
+    setProofs([...proofs, { title: '', category: 'AADHAAR', fileUrl: '' }]);
+  };
+
+  const handleRemoveProofField = (index: number) => {
+    const updated = [...proofs];
+    updated.splice(index, 1);
+    setProofs(updated);
+  };
+
+  const handleProofChange = (index: number, field: string, value: string) => {
+    const updated = [...proofs];
+    (updated[index] as any)[field] = value;
+    setProofs(updated);
   };
 
   const handleDeleteCustomer = async (id: string, name: string) => {
@@ -90,10 +131,15 @@ export default function CustomersPage() {
       const url = editingCustomer ? `/api/customers/${editingCustomer.id}` : '/api/customers';
       const method = editingCustomer ? 'PUT' : 'POST';
 
+      const payload = {
+        ...formData,
+        proofs: proofs.filter((p) => p.title.trim() && p.fileUrl.trim()),
+      };
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setShowModal(false);
@@ -110,7 +156,10 @@ export default function CustomersPage() {
           nomineeRelation: '',
           nomineeMobile: '',
           remarks: '',
+          photoUrl: '',
         });
+        setProofs([]);
+        setShowProofFields(false);
         fetchCustomers();
       } else {
         const err = await res.json();
@@ -130,7 +179,7 @@ export default function CustomersPage() {
             <Users className="w-6 h-6 text-brand-600" /> Customer Master Directory
           </h1>
           <p className="text-xs text-slate-500">
-            Manage KYC profiles, contact details, loan history, and document repository.
+            Manage KYC profiles, photo identification, proof documents, loan history, and print customer files.
           </p>
         </div>
 
@@ -149,7 +198,10 @@ export default function CustomersPage() {
               nomineeRelation: '',
               nomineeMobile: '',
               remarks: '',
+              photoUrl: '',
             });
+            setProofs([]);
+            setShowProofFields(false);
             setShowModal(true);
           }}
           className="px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm rounded-xl shadow-md transition-all flex items-center space-x-2"
@@ -177,12 +229,12 @@ export default function CustomersPage() {
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold text-xs uppercase tracking-wider">
+                <th className="p-4">Photo</th>
                 <th className="p-4">Customer ID</th>
                 <th className="p-4">Name & Address</th>
                 <th className="p-4">Mobile & Email</th>
                 <th className="p-4">KYC (Aadhaar/PAN)</th>
                 <th className="p-4">Total Loans</th>
-                <th className="p-4">Joined Date</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -202,6 +254,20 @@ export default function CustomersPage() {
               ) : (
                 customers.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    {/* Customer Photo Column */}
+                    <td className="p-4">
+                      {c.photoUrl ? (
+                        <img
+                          src={c.photoUrl}
+                          alt={c.name}
+                          className="w-10 h-10 rounded-full object-cover border border-slate-300 dark:border-slate-700 shadow-sm"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs border border-brand-500/20">
+                          {c.name ? c.name.slice(0, 2).toUpperCase() : 'CU'}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-4 font-mono font-bold text-brand-600 dark:text-brand-400">
                       {c.customerId}
                     </td>
@@ -224,20 +290,19 @@ export default function CustomersPage() {
                         {c.loans?.length || 0} Loans
                       </span>
                     </td>
-                    <td className="p-4 text-xs text-slate-500">{formatDate(c.createdAt)}</td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end space-x-1">
                         <button
                           onClick={() => setSelectedCustomer(c)}
                           className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-brand-600 dark:text-brand-400 transition-colors"
-                          title="View Customer Profile & Timeline"
+                          title="View Customer Profile & Documents"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleOpenEdit(c)}
                           className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/60 text-amber-600 dark:text-amber-400 transition-colors"
-                          title="Edit Customer Details"
+                          title="Edit Customer Details & Photo"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
@@ -249,9 +314,15 @@ export default function CustomersPage() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => setPrintModal({ isOpen: true, title: `Customer Profile - ${c.name}`, url: `/print/customer/${c.id}` })}
+                          onClick={() =>
+                            setPrintModal({
+                              isOpen: true,
+                              title: `Customer Profile - ${c.name}`,
+                              url: `/print/customer/${c.id}`,
+                            })
+                          }
                           className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-emerald-600 dark:text-emerald-400 transition-colors"
-                          title="Print Customer Profile & Audit Form"
+                          title="Print Customer Profile & Photo"
                         >
                           <Printer className="w-4 h-4" />
                         </button>
@@ -265,13 +336,14 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Create Modal */}
+      {/* Customer Create & Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-brand-600" /> Add New Customer Master Record
+                <UserCheck className="w-5 h-5 text-brand-600" />
+                {editingCustomer ? 'Edit Customer Master Record' : 'Add New Customer Master Record'}
               </h2>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
@@ -279,6 +351,39 @@ export default function CustomersPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+              {/* Customer Photo Upload Section (Default Visible) */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center gap-4">
+                <div className="relative">
+                  {formData.photoUrl ? (
+                    <img
+                      src={formData.photoUrl}
+                      alt="Customer Preview"
+                      className="w-20 h-20 rounded-2xl object-cover border-2 border-brand-500 shadow-md"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-2xl bg-slate-200 dark:bg-slate-700 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-600">
+                      <Camera className="w-7 h-7 mb-1" />
+                      <span className="text-[9px] font-semibold uppercase">No Photo</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 w-full">
+                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-200">
+                    Customer Photo URL / Link *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.photoUrl}
+                    onChange={(e) => setFormData({ ...formData, photoUrl: e.target.value })}
+                    placeholder="Paste image URL (e.g. https://... or data:image/...)"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Photo will be displayed on Customer Directory and printed on official Loan Agreements.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold mb-1">Customer Full Name *</label>
@@ -390,6 +495,71 @@ export default function CustomersPage() {
                 </div>
               </div>
 
+              {/* "Add Proof" Button & Dynamic Proof Fields */}
+              <div className="p-4 rounded-2xl bg-brand-500/5 border border-brand-500/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-xs text-brand-600 dark:text-brand-400 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4" /> Identity & Document Proof Attachments
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddProofField}
+                    className="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs rounded-lg shadow-sm transition flex items-center space-x-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Proof Document</span>
+                  </button>
+                </div>
+
+                {proofs.map((proof, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl space-y-2 relative"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveProofField(idx)}
+                      className="absolute right-2 top-2 text-rose-500 hover:text-rose-700"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Proof Title (e.g. Aadhaar Front)"
+                        value={proof.title}
+                        onChange={(e) => handleProofChange(idx, 'title', e.target.value)}
+                        className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"
+                      />
+                      <select
+                        value={proof.category}
+                        onChange={(e) => handleProofChange(idx, 'category', e.target.value)}
+                        className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"
+                      >
+                        <option value="AADHAAR">Aadhaar Card</option>
+                        <option value="PAN">PAN Card</option>
+                        <option value="PROPERTY_DOC">Property Document</option>
+                        <option value="PHOTO">Customer Photo</option>
+                        <option value="OTHER">Other Proof</option>
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="File / Image URL"
+                        value={proof.fileUrl}
+                        onChange={(e) => handleProofChange(idx, 'fileUrl', e.target.value)}
+                        className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                {proofs.length === 0 && (
+                  <p className="text-[11px] text-slate-400 italic">
+                    Click "Add Proof Document" above to attach extra identity proof pictures.
+                  </p>
+                )}
+              </div>
+
               <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
@@ -415,13 +585,26 @@ export default function CustomersPage() {
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-end">
           <div className="bg-white dark:bg-slate-900 w-full max-w-xl h-full p-6 overflow-y-auto shadow-2xl border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <span className="text-xs font-mono font-bold text-brand-600">
-                  {selectedCustomer.customerId}
-                </span>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                  {selectedCustomer.name}
-                </h2>
+              <div className="flex items-center space-x-3">
+                {selectedCustomer.photoUrl ? (
+                  <img
+                    src={selectedCustomer.photoUrl}
+                    alt={selectedCustomer.name}
+                    className="w-14 h-14 rounded-2xl object-cover border-2 border-brand-500 shadow-md"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-brand-500/10 text-brand-600 flex items-center justify-center font-bold text-lg border border-brand-500/20">
+                    {selectedCustomer.name?.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <span className="text-xs font-mono font-bold text-brand-600">
+                    {selectedCustomer.customerId}
+                  </span>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                    {selectedCustomer.name}
+                  </h2>
+                </div>
               </div>
               <button onClick={() => setSelectedCustomer(null)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
                 <X className="w-5 h-5 text-slate-400" />
@@ -447,6 +630,34 @@ export default function CustomersPage() {
                   <div className="font-semibold">{selectedCustomer.occupation || 'N/A'}</div>
                 </div>
               </div>
+
+              {/* Uploaded Documents & Proofs */}
+              {selectedCustomer.documents && selectedCustomer.documents.length > 0 && (
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-brand-600" /> Attached Proof Documents ({selectedCustomer.documents.length})
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedCustomer.documents.map((doc: any) => (
+                      <a
+                        key={doc.id}
+                        href={doc.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex items-center space-x-3 transition bg-slate-50 dark:bg-slate-800/40"
+                      >
+                        <ImageIcon className="w-5 h-5 text-brand-600" />
+                        <div className="overflow-hidden">
+                          <div className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">
+                            {doc.title}
+                          </div>
+                          <div className="text-[10px] text-slate-500 uppercase">{doc.category}</div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-2">

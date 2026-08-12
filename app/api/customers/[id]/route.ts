@@ -75,8 +75,26 @@ export async function PUT(
         nomineeRelation: data.nomineeRelation || null,
         nomineeMobile: data.nomineeMobile || null,
         remarks: data.remarks || null,
+        photoUrl: data.photoUrl !== undefined ? data.photoUrl : undefined,
       },
     });
+
+    if (data.proofs && Array.isArray(data.proofs)) {
+      for (const proof of data.proofs) {
+        if (proof.fileUrl && proof.title) {
+          await db.document.create({
+            data: {
+              title: proof.title,
+              category: proof.category || 'OTHER',
+              fileUrl: proof.fileUrl,
+              customerId: updated.id,
+              isEncrypted: true,
+              watermarkText: `CONFIDENTIAL - ABS FINANCE - ${updated.name}`,
+            },
+          });
+        }
+      }
+    }
 
     await db.auditLog.create({
       data: {

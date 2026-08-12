@@ -43,19 +43,36 @@ export default async function LoanAgreementPrintPage({ params }: { params: Promi
             THIS DEED OF LOAN AGREEMENT is executed on {formatDate(loan.loanDate)} between {companyName} (LENDER) and {loan.customer.name} (BORROWER).
           </div>
 
-          {/* Section 1: Borrower Information */}
+          {/* Section 1: Borrower Information with Photo */}
           <div>
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5 mb-1.5">
               Article I: Borrower Identity & Particulars
             </h2>
-            <div className="grid grid-cols-3 gap-2 bg-slate-50/50 p-2 border border-slate-200 rounded">
-              <div><span className="text-slate-500 block text-[10px]">Borrower Name:</span><span className="font-bold text-slate-900">{loan.customer.name}</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Customer Ref ID:</span><span className="font-mono font-bold">{loan.customer.customerId}</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Contact Mobile:</span><span className="font-semibold">{loan.customer.mobile}</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Aadhaar Card #:</span><span className="font-mono font-semibold">{loan.customer.aadhaar}</span></div>
-              <div><span className="text-slate-500 block text-[10px]">PAN Card #:</span><span className="font-mono font-semibold">{loan.customer.pan || 'N/A'}</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Occupation:</span><span className="font-semibold">{loan.customer.occupation || 'N/A'}</span></div>
-              <div className="col-span-3"><span className="text-slate-500 block text-[10px]">Permanent Address:</span><span className="font-semibold">{loan.customer.address}</span></div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 grid grid-cols-3 gap-2 bg-slate-50/50 p-2 border border-slate-200 rounded">
+                <div><span className="text-slate-500 block text-[10px]">Borrower Name:</span><span className="font-bold text-slate-900">{loan.customer.name}</span></div>
+                <div><span className="text-slate-500 block text-[10px]">Customer Ref ID:</span><span className="font-mono font-bold">{loan.customer.customerId}</span></div>
+                <div><span className="text-slate-500 block text-[10px]">Contact Mobile:</span><span className="font-semibold">{loan.customer.mobile}</span></div>
+                <div><span className="text-slate-500 block text-[10px]">Aadhaar Card #:</span><span className="font-mono font-semibold">{loan.customer.aadhaar}</span></div>
+                <div><span className="text-slate-500 block text-[10px]">PAN Card #:</span><span className="font-mono font-semibold">{loan.customer.pan || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block text-[10px]">Occupation:</span><span className="font-semibold">{loan.customer.occupation || 'N/A'}</span></div>
+                <div className="col-span-3"><span className="text-slate-500 block text-[10px]">Permanent Address:</span><span className="font-semibold">{loan.customer.address}</span></div>
+              </div>
+
+              {/* Borrower Official Passport Photo Frame */}
+              <div className="w-24 h-28 border border-slate-400 p-1 flex flex-col items-center justify-center bg-slate-50 flex-shrink-0">
+                {loan.customer.photoUrl ? (
+                  <img
+                    src={loan.customer.photoUrl}
+                    alt={loan.customer.name}
+                    className="w-full h-full object-cover rounded-none"
+                  />
+                ) : (
+                  <div className="text-[9px] text-slate-400 text-center uppercase font-bold p-1">
+                    Borrower Photo
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -93,34 +110,25 @@ export default async function LoanAgreementPrintPage({ params }: { params: Promi
             </div>
           )}
 
-          {/* Section 4: General Terms & Covenants */}
-          <div>
+          {/* Section 4: Signatures */}
+          <div className="pt-4">
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5 mb-1.5">
-              Article IV: Key Covenants & Remedies
+              Article IV: Execution & Execution Signatures
             </h2>
-            <ol className="list-decimal pl-4 space-y-0.5 text-[10px] text-slate-700">
-              <li>Borrower agrees to pay monthly interest and principal dues on or before the due date.</li>
-              <li>Overdue payments after grace period attract penalty of {settings?.defaultPenalty || 2.0}% per month.</li>
-              <li>Default &gt;60 days entitles Lender to initiate legal recovery under NI Act / SARFAESI and liquidate collateral.</li>
-            </ol>
-          </div>
-
-          {/* Signatures */}
-          <div className="pt-4 print:pt-4">
-            <div className="grid grid-cols-2 gap-12 border-t border-slate-400 pt-6 text-center font-bold text-xs">
-              <div>
-                <div className="border-t border-slate-400 pt-1">Signature of Borrower / Guarantor</div>
-                <div className="text-[10px] font-normal text-slate-500 mt-0.5">{loan.customer.name}</div>
+            <div className="grid grid-cols-2 gap-8 pt-4">
+              <div className="border-t border-slate-400 pt-1 text-center">
+                <span className="font-bold block text-xs">{loan.customer.name}</span>
+                <span className="text-[10px] text-slate-500">BORROWER / DEBTOR</span>
               </div>
-              <div>
-                <div className="border-t border-slate-400 pt-1">For {companyName}</div>
-                <div className="text-[10px] font-normal text-slate-500 mt-0.5">Authorized Signatory & Seal</div>
+              <div className="border-t border-slate-400 pt-1 text-center">
+                <span className="font-bold block text-xs">For {companyName}</span>
+                <span className="text-[10px] text-slate-500">AUTHORIZED LENDER SIGNATORY</span>
               </div>
             </div>
           </div>
         </div>
 
-        <PrintFooter printedBy="Legal Officer" />
+        <PrintFooter />
       </main>
     </div>
   );

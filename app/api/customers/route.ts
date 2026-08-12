@@ -90,8 +90,27 @@ export async function POST(request: Request) {
         nomineeRelation: data.nomineeRelation || null,
         nomineeMobile: data.nomineeMobile || null,
         remarks: data.remarks || null,
+        photoUrl: data.photoUrl || null,
       },
     });
+
+    // Save proof documents if provided
+    if (data.proofs && Array.isArray(data.proofs)) {
+      for (const proof of data.proofs) {
+        if (proof.fileUrl && proof.title) {
+          await db.document.create({
+            data: {
+              title: proof.title,
+              category: proof.category || 'OTHER',
+              fileUrl: proof.fileUrl,
+              customerId: customer.id,
+              isEncrypted: true,
+              watermarkText: `CONFIDENTIAL - ABS FINANCE - ${customer.name}`,
+            },
+          });
+        }
+      }
+    }
 
     // Audit log
     await db.auditLog.create({

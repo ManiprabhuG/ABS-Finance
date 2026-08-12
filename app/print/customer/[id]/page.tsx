@@ -17,6 +17,7 @@ export default async function CustomerPrintPage({ params }: { params: Promise<{ 
       include: {
         loans: true,
         collections: true,
+        documents: true,
       },
     }),
     db.systemSettings.findFirst(),
@@ -35,49 +36,67 @@ export default async function CustomerPrintPage({ params }: { params: Promise<{ 
 
       <main className="max-w-4xl mx-auto bg-white p-8 sm:p-12 shadow-xl print:shadow-none rounded-2xl print:rounded-none border print:border-none border-slate-200">
         <PrintHeader
-          documentTitle="Customer Master Profile"
+          documentTitle="Customer Master Profile & Audit Record"
           documentNumber={customer.customerId}
           settings={settings}
         />
 
-        {/* Customer Information */}
+        {/* Customer Information with Official Photo Box */}
         <div className="space-y-6">
           <div>
             <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-1 mb-3">
               1. Customer Personal & Identity Details
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
-              <div>
-                <span className="text-slate-500 block">Customer ID:</span>
-                <span className="font-mono font-bold text-slate-900 text-sm">{customer.customerId}</span>
+
+            <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
+              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <span className="text-slate-500 block">Customer ID:</span>
+                  <span className="font-mono font-bold text-slate-900 text-sm">{customer.customerId}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Full Name:</span>
+                  <span className="font-bold text-slate-900 text-sm">{customer.name}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Mobile Number:</span>
+                  <span className="font-semibold text-slate-800">{customer.mobile}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Aadhaar Number:</span>
+                  <span className="font-mono font-semibold text-slate-800">{customer.aadhaar}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">PAN Number:</span>
+                  <span className="font-mono font-semibold text-slate-800">{customer.pan || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Registration Date:</span>
+                  <span className="font-semibold text-slate-800">{formatDate(customer.createdAt)}</span>
+                </div>
+                <div className="col-span-2 sm:col-span-3">
+                  <span className="text-slate-500 block">Residential Address:</span>
+                  <span className="font-semibold text-slate-800">{customer.address}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Occupation / Profession:</span>
+                  <span className="font-semibold text-slate-800">{customer.occupation || 'N/A'}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-500 block">Full Name:</span>
-                <span className="font-bold text-slate-900 text-sm">{customer.name}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Mobile Number:</span>
-                <span className="font-semibold text-slate-800">{customer.mobile}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Aadhaar Number:</span>
-                <span className="font-mono font-semibold text-slate-800">{customer.aadhaar}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">PAN Number:</span>
-                <span className="font-mono font-semibold text-slate-800">{customer.pan || 'N/A'}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Registration Date:</span>
-                <span className="font-semibold text-slate-800">{formatDate(customer.createdAt)}</span>
-              </div>
-              <div className="col-span-2">
-                <span className="text-slate-500 block">Residential Address:</span>
-                <span className="font-semibold text-slate-800">{customer.address}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Occupation / Profession:</span>
-                <span className="font-semibold text-slate-800">{customer.occupation || 'N/A'}</span>
+
+              {/* Official Customer Passport Photo Frame for Printout */}
+              <div className="w-28 h-32 border-2 border-slate-400 p-1 flex flex-col items-center justify-center bg-slate-50 flex-shrink-0 self-center sm:self-start">
+                {customer.photoUrl ? (
+                  <img
+                    src={customer.photoUrl}
+                    alt={customer.name}
+                    className="w-full h-full object-cover rounded-none"
+                  />
+                ) : (
+                  <div className="text-[10px] text-slate-400 text-center uppercase font-bold p-2">
+                    Affix Customer Passport Photo
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -103,70 +122,50 @@ export default async function CustomerPrintPage({ params }: { params: Promise<{ 
             </div>
           </div>
 
+          {/* Verification Proof Documents List */}
+          {customer.documents && customer.documents.length > 0 && (
+            <div>
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-1 mb-3">
+                3. Attached KYC & Identity Proof Records
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                {customer.documents.map((doc: any) => (
+                  <div key={doc.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                    <span className="font-bold text-slate-900 block truncate">{doc.title}</span>
+                    <span className="text-[10px] text-slate-500 font-mono uppercase">{doc.category}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Loan Portfolio Summary */}
           <div>
             <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-1 mb-3">
-              3. Customer Financial & Loan Portfolio Summary
+              4. Associated Loan Portfolio Summary
             </h2>
-            <div className="grid grid-cols-4 gap-4 text-center bg-slate-900 text-white p-4 rounded-xl font-mono">
-              <div>
-                <div className="text-[10px] text-slate-400">Total Loans</div>
-                <div className="text-lg font-black">{totalLoans}</div>
+            <div className="grid grid-cols-4 gap-4 text-xs mb-4">
+              <div className="bg-slate-50 p-3 rounded-lg border text-center">
+                <span className="text-slate-500 block">Total Facilities</span>
+                <span className="font-bold text-slate-900 text-sm">{totalLoans}</span>
               </div>
-              <div>
-                <div className="text-[10px] text-slate-400">Active Loans</div>
-                <div className="text-lg font-black text-emerald-400">{activeLoans}</div>
+              <div className="bg-slate-50 p-3 rounded-lg border text-center">
+                <span className="text-slate-500 block">Active / Overdue</span>
+                <span className="font-bold text-emerald-700 text-sm">{activeLoans}</span>
               </div>
-              <div>
-                <div className="text-[10px] text-slate-400">Closed Loans</div>
-                <div className="text-lg font-black text-slate-300">{closedLoans}</div>
+              <div className="bg-slate-50 p-3 rounded-lg border text-center">
+                <span className="text-slate-500 block">Closed Facilities</span>
+                <span className="font-bold text-slate-900 text-sm">{closedLoans}</span>
               </div>
-              <div>
-                <div className="text-[10px] text-slate-400">Total Outstanding</div>
-                <div className="text-lg font-black text-amber-400">{formatCurrency(totalOutstanding)}</div>
+              <div className="bg-slate-50 p-3 rounded-lg border text-center">
+                <span className="text-slate-500 block">Total Outstanding</span>
+                <span className="font-bold text-brand-700 text-sm">{formatCurrency(totalOutstanding)}</span>
               </div>
             </div>
           </div>
-
-          {/* Associated Loans List */}
-          <div>
-            <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-1 mb-3">
-              4. Loan Accounts List
-            </h2>
-            <table className="w-full text-left text-xs border border-slate-300">
-              <thead className="bg-slate-100 font-bold uppercase">
-                <tr>
-                  <th className="p-2 border border-slate-300">Loan #</th>
-                  <th className="p-2 border border-slate-300">Type</th>
-                  <th className="p-2 border border-slate-300">Principal Amount</th>
-                  <th className="p-2 border border-slate-300">Interest Rate</th>
-                  <th className="p-2 border border-slate-300">Outstanding</th>
-                  <th className="p-2 border border-slate-300">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customer.loans.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-4 text-center text-slate-500">No loan accounts registered</td>
-                  </tr>
-                ) : (
-                  customer.loans.map((l) => (
-                    <tr key={l.id} className="border border-slate-200">
-                      <td className="p-2 font-mono font-bold">{l.loanNumber}</td>
-                      <td className="p-2">{l.loanType}</td>
-                      <td className="p-2 font-bold">{formatCurrency(l.principalAmount)}</td>
-                      <td className="p-2">{l.interestRate}% ({l.interestType})</td>
-                      <td className="p-2 font-bold text-slate-900">{formatCurrency(l.outstandingBalance)}</td>
-                      <td className="p-2 font-semibold">{l.status}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
         </div>
 
-        <PrintFooter signatureRequired={true} />
+        <PrintFooter />
       </main>
     </div>
   );
