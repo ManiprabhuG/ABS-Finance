@@ -37,7 +37,7 @@ model Customer {
   nomineeName     String?
   nomineeRelation String?
   nomineeMobile   String?
-  photoUrl        String?
+  photoUrl        String?      @db.LongText
   remarks         String?
   riskScore       Float        @default(85.0)
   riskCategory    String       @default("LOW") // LOW, MEDIUM, HIGH, BLACKLISTED
@@ -243,7 +243,7 @@ model Document {
   id            String    @id @default(uuid())
   title         String
   category      String    // AADHAAR, PAN, PROPERTY_DOC, LOAN_AGREEMENT, MORTGAGE_DOC, PHOTO, OTHER
-  fileUrl       String
+  fileUrl       String    @db.LongText
   isEncrypted   Boolean   @default(false)
   watermarkText String?
   expiryDate    DateTime?

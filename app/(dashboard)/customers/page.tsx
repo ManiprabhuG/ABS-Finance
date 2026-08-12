@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Users,
   Plus,
@@ -16,7 +16,9 @@ import {
   Printer,
   Camera,
   Image as ImageIcon,
-  ShieldCheck,
+  Upload,
+  Paperclip,
+  Check,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/export-utils';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
@@ -32,6 +34,9 @@ export default function CustomersPage() {
     title: '',
     url: '',
   });
+
+  // File Input References
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Proof Documents Array State for Customer Form
   const [proofs, setProofs] = useState<Array<{ title: string; category: string; fileUrl: string }>>([]);
@@ -93,6 +98,24 @@ export default function CustomersPage() {
     setShowModal(true);
   };
 
+  // Handle Photo File Upload (Converts file directly to Data URL for database storage)
+  const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo file size should be less than 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setFormData((prev) => ({ ...prev, photoUrl: event.target!.result as string }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Add Dynamic Proof Attachment Field
   const handleAddProofField = () => {
     setShowProofFields(true);
     setProofs([...proofs, { title: '', category: 'AADHAAR', fileUrl: '' }]);
@@ -108,6 +131,24 @@ export default function CustomersPage() {
     const updated = [...proofs];
     (updated[index] as any)[field] = value;
     setProofs(updated);
+  };
+
+  // Handle Proof Document File Upload (Converts file directly to Data URL for database storage)
+  const handleProofFileUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        const updated = [...proofs];
+        updated[index].fileUrl = event.target!.result as string;
+        if (!updated[index].title) {
+          updated[index].title = file.name.replace(/\.[^/.]+$/, '');
+        }
+        setProofs(updated);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleDeleteCustomer = async (id: string, name: string) => {
@@ -179,7 +220,7 @@ export default function CustomersPage() {
             <Users className="w-6 h-6 text-brand-600" /> Customer Master Directory
           </h1>
           <p className="text-xs text-slate-500">
-            Manage KYC profiles, photo identification, proof documents, loan history, and print customer files.
+            Manage KYC profiles, photo identification upload, proof attachments, loan history, and print customer files.
           </p>
         </div>
 
@@ -351,35 +392,65 @@ export default function CustomersPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-              {/* Customer Photo Upload Section (Default Visible) */}
+              {/* Customer Photo Upload Section (Default Visible File Input) */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center gap-4">
                 <div className="relative">
                   {formData.photoUrl ? (
-                    <img
-                      src={formData.photoUrl}
-                      alt="Customer Preview"
-                      className="w-20 h-20 rounded-2xl object-cover border-2 border-brand-500 shadow-md"
-                    />
+                    <div className="relative group">
+                      <img
+                        src={formData.photoUrl}
+                        alt="Customer Preview"
+                        className="w-24 h-24 rounded-2xl object-cover border-2 border-brand-500 shadow-md"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, photoUrl: '' })}
+                        className="absolute -top-2 -right-2 bg-rose-600 text-white rounded-full p-1 shadow-lg hover:bg-rose-500 transition"
+                        title="Remove Photo"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   ) : (
-                    <div className="w-20 h-20 rounded-2xl bg-slate-200 dark:bg-slate-700 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-600">
-                      <Camera className="w-7 h-7 mb-1" />
-                      <span className="text-[9px] font-semibold uppercase">No Photo</span>
+                    <div className="w-24 h-24 rounded-2xl bg-slate-200 dark:bg-slate-700 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-600">
+                      <Camera className="w-8 h-8 mb-1 text-slate-400" />
+                      <span className="text-[10px] font-bold uppercase text-slate-500">No Photo</span>
                     </div>
                   )}
                 </div>
-                <div className="flex-1 w-full">
-                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-200">
-                    Customer Photo URL / Link *
+
+                <div className="flex-1 w-full space-y-2">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Customer Photo Upload *
                   </label>
+
+                  {/* Hidden File Input & Custom Upload Button */}
                   <input
-                    type="text"
-                    value={formData.photoUrl}
-                    onChange={(e) => setFormData({ ...formData, photoUrl: e.target.value })}
-                    placeholder="Paste image URL (e.g. https://... or data:image/...)"
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs"
+                    type="file"
+                    ref={photoInputRef}
+                    onChange={handlePhotoFileUpload}
+                    accept="image/*"
+                    className="hidden"
                   />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Photo will be displayed on Customer Directory and printed on official Loan Agreements.
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs rounded-xl shadow-md transition flex items-center space-x-2"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>{formData.photoUrl ? 'Change Photo File' : 'Upload Photo File'}</span>
+                    </button>
+                    {formData.photoUrl && (
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                        <Check className="w-4 h-4" /> Photo Loaded
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-tight">
+                    Upload image file (JPG, PNG, WebP). Image is stored directly in database and displayed on official Loan Agreements.
                   </p>
                 </div>
               </div>
@@ -495,7 +566,7 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              {/* "Add Proof" Button & Dynamic Proof Fields */}
+              {/* "Add Proof" Button & Dynamic Proof File Upload Fields */}
               <div className="p-4 rounded-2xl bg-brand-500/5 border border-brand-500/20 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="font-bold text-xs text-brand-600 dark:text-brand-400 flex items-center gap-1.5">
@@ -526,7 +597,7 @@ export default function CustomersPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <input
                         type="text"
-                        placeholder="Proof Title (e.g. Aadhaar Front)"
+                        placeholder="Proof Title (e.g. Aadhaar Card Front)"
                         value={proof.title}
                         onChange={(e) => handleProofChange(idx, 'title', e.target.value)}
                         className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"
@@ -542,20 +613,35 @@ export default function CustomersPage() {
                         <option value="PHOTO">Customer Photo</option>
                         <option value="OTHER">Other Proof</option>
                       </select>
-                      <input
-                        type="text"
-                        placeholder="File / Image URL"
-                        value={proof.fileUrl}
-                        onChange={(e) => handleProofChange(idx, 'fileUrl', e.target.value)}
-                        className="bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"
-                      />
+
+                      {/* Proof File Picker */}
+                      <div className="flex items-center space-x-2">
+                        <label className="flex-1 cursor-pointer bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center space-x-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                          <Paperclip className="w-3.5 h-3.5 text-brand-600" />
+                          <span className="truncate">
+                            {proof.fileUrl ? 'Change File' : 'Upload Proof File'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={(e) => handleProofFileUpload(idx, e)}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     </div>
+
+                    {proof.fileUrl && (
+                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> File attached & ready for database upload
+                      </div>
+                    )}
                   </div>
                 ))}
 
                 {proofs.length === 0 && (
                   <p className="text-[11px] text-slate-400 italic">
-                    Click "Add Proof Document" above to attach extra identity proof pictures.
+                    Click "Add Proof Document" above to upload extra identity proof files (Aadhaar, PAN, Property Deed).
                   </p>
                 )}
               </div>
@@ -646,7 +732,7 @@ export default function CustomersPage() {
                         rel="noreferrer"
                         className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex items-center space-x-3 transition bg-slate-50 dark:bg-slate-800/40"
                       >
-                        <ImageIcon className="w-5 h-5 text-brand-600" />
+                        <ImageIcon className="w-5 h-5 text-brand-600 flex-shrink-0" />
                         <div className="overflow-hidden">
                           <div className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">
                             {doc.title}
