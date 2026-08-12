@@ -15,6 +15,10 @@ import {
   History,
   ShieldCheck,
   Building,
+  ShieldAlert,
+  AlertOctagon,
+  Gavel,
+  TrendingUp,
 } from 'lucide-react';
 import { hasPermission } from '@/lib/auth';
 
@@ -31,6 +35,10 @@ export function Sidebar({ role = 'SUPER_ADMIN' }: SidebarProps) {
     { label: 'Loan Management', href: '/loans', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'LOAN_OFFICER', 'VIEWER'] },
     { label: 'Collection Entry', href: '/collections', icon: ReceiptText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'COLLECTION_OFFICER', 'VIEWER'] },
     { label: 'Finance & Accounts', href: '/finance', icon: Landmark, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'VIEWER'] },
+    { label: 'Risk Engine', href: '/risk', icon: ShieldAlert, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'LOAN_OFFICER'] },
+    { label: 'Fraud Alerts', href: '/fraud', icon: AlertOctagon, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+    { label: 'NPA & Recovery', href: '/npa', icon: Gavel, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'COLLECTION_OFFICER'] },
+    { label: 'CEO Dashboard (BI)', href: '/bi', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
     { label: 'Slabs & Rates', href: '/slabs', icon: SlidersHorizontal, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'LOAN_OFFICER'] },
     { label: 'Reports & Analytics', href: '/reports', icon: BarChart3, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'VIEWER'] },
     { label: 'Audit Logs', href: '/audit-logs', icon: History, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },

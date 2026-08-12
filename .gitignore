@@ -37,3 +37,9 @@ prisma/*.db
 
 # scratch files
 scratch/
+
+
+# Markdown files (expert README.md)  
+!README.md
+*.md
+/Markdown

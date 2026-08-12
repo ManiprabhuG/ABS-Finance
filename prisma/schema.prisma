@@ -39,12 +39,18 @@ model Customer {
   nomineeMobile   String?
   photoUrl        String?
   remarks         String?
+  riskScore       Float        @default(85.0)
+  riskCategory    String       @default("LOW") // LOW, MEDIUM, HIGH, BLACKLISTED
+  isBlacklisted   Boolean      @default(false)
+  riskFactors     String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   loans       Loan[]
   collections Collection[]
   documents   Document[]
+  riskLogs    CustomerRiskLog[]
+  fraudAlerts FraudAlert[]
 }
 
 model Loan {
@@ -58,6 +64,8 @@ model Loan {
   tenureMonths       Int             @default(12)
   loanDate           DateTime        @default(now())
   status             String          @default("PENDING") // PENDING, APPROVED, DISBURSED, ACTIVE, OVERDUE, CLOSED, REJECTED
+  npaCategory        String          @default("STANDARD") // STANDARD, SUBSTANDARD, DOUBTFUL, NPA
+  npaDays            Int             @default(0)
   outstandingBalance Float
   disbursedFrom      String?         // CASH or BANK
   bankAccountId      String?
@@ -70,6 +78,9 @@ model Loan {
   collections    Collection[]
   ledgerEntries  LedgerEntry[]
   documents      Document[]
+  npaRecoveries  NPARecovery[]
+  legalCases     LegalCase[]
+  fraudAlerts    FraudAlert[]
 }
 
 model MortgageDetail {
@@ -229,13 +240,17 @@ model FundTransfer {
 }
 
 model Document {
-  id         String   @id @default(uuid())
-  title      String
-  category   String   // AADHAAR, PAN, PROPERTY_DOC, LOAN_AGREEMENT, MORTGAGE_DOC, PHOTO, OTHER
-  fileUrl    String
-  customerId String?
-  loanId     String?
-  createdAt  DateTime @default(now())
+  id            String    @id @default(uuid())
+  title         String
+  category      String    // AADHAAR, PAN, PROPERTY_DOC, LOAN_AGREEMENT, MORTGAGE_DOC, PHOTO, OTHER
+  fileUrl       String
+  isEncrypted   Boolean   @default(false)
+  watermarkText String?
+  expiryDate    DateTime?
+  viewCount     Int       @default(0)
+  customerId    String?
+  loanId        String?
+  createdAt     DateTime  @default(now())
 
   customer Customer? @relation(fields: [customerId], references: [id])
   loan     Loan?     @relation(fields: [loanId], references: [id])
@@ -269,3 +284,72 @@ model SystemSettings {
   financialYear    String @default("2026-2027")
   currencySymbol   String @default("₹")
 }
+
+model CustomerRiskLog {
+  id                 String   @id @default(uuid())
+  customerId         String
+  riskScore          Float
+  riskCategory       String   // LOW, MEDIUM, HIGH, BLACKLISTED
+  verificationScores String?  // JSON breakdown
+  riskFactors        String?
+  evaluatedAt        DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model FraudAlert {
+  id          String   @id @default(uuid())
+  type        String   // DUPLICATE_IDENTIFIER, ABNORMAL_COLLECTION, SUSPICIOUS_TRANSFER, FAKE_CONTACT
+  severity    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  customerId  String?
+  loanId      String?
+  details     String
+  status      String   @default("OPEN") // OPEN, INVESTIGATING, RESOLVED, DISMISSED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  loan     Loan?     @relation(fields: [loanId], references: [id], onDelete: SetNull)
+}
+
+model NPARecovery {
+  id           String    @id @default(uuid())
+  loanId       String
+  npaCategory  String    // STANDARD, SUBSTANDARD, DOUBTFUL, NPA
+  daysOverdue  Int
+  actionType   String    // CALL, VISIT, NOTICE, LEGAL
+  officerName  String
+  actionDate   DateTime  @default(now())
+  notes        String?
+  nextFollowUp DateTime?
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+}
+
+model LegalCase {
+  id          String    @id @default(uuid())
+  loanId      String
+  caseNumber  String    @unique
+  courtName   String
+  advocate    String
+  filingDate  DateTime  @default(now())
+  hearingDate DateTime?
+  status      String    @default("FILED") // FILED, IN_PROGRESS, NOTICE_SENT, JUDGMENT_DECREE, RECOVERED, CLOSED
+  claimAmount Float
+  remarks     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+}
+
+model UserDeviceLog {
+  id         String   @id @default(uuid())
+  userId     String
+  ipAddress  String
+  userAgent  String
+  deviceType String   @default("DESKTOP")
+  location   String?
+  loginTime  DateTime @default(now())
+}
+
