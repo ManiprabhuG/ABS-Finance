@@ -3,20 +3,129 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('🌱 Seeding TiDB database with realistic enterprise data...');
+// Configuration driven by environment variables with dynamic fallbacks
+const SEED_CONFIG = {
+  customerCount: Number(process.env.SEED_CUSTOMER_COUNT) || 10,
+  loanCount: Number(process.env.SEED_LOAN_COUNT) || 15,
+  companyName: process.env.COMPANY_NAME || 'ABS Finance Management Ltd.',
+  companyAddress: process.env.COMPANY_ADDRESS || 'Suite 401, Financial Tower, BKC, Mumbai 400051',
+  gstNumber: process.env.COMPANY_GST || '27AAACA1234B1Z9',
+  contactPhone: process.env.COMPANY_PHONE || '+91 98765 43210',
+  contactEmail: process.env.COMPANY_EMAIL || 'contact@absfinance.com',
+  loanPrefix: process.env.LOAN_PREFIX || 'LN-2026',
+  receiptPrefix: process.env.RECEIPT_PREFIX || 'REC-2026',
+};
 
-  // 1. System Settings
+// Helper Random Data Generators
+const FIRST_NAMES = [
+  'Rajesh', 'Priya', 'Ankit', 'Sunita', 'Vikram', 'Ananya', 'Ramesh', 'Kavita',
+  'Rahul', 'Deepa', 'Suresh', 'Meera', 'Arjun', 'Neha', 'Karthik', 'Lakshmi',
+  'Amit', 'Pooja', 'Sanjay', 'Ritu', 'Manish', 'Shweta', 'Vijay', 'Divya'
+];
+
+const LAST_NAMES = [
+  'Kumar', 'Sharma', 'Patel', 'Verma', 'Mehta', 'Pawar', 'Iyer', 'Joshi',
+  'Reddy', 'Singh', 'Nair', 'Gupta', 'Deshmukh', 'Kulkarni', 'Chaudhary', 'Rao'
+];
+
+const OCCUPATIONS = [
+  'Retail Textile Business Owner', 'Senior Software Architect', 'Logistics & Fleet Operator',
+  'Healthcare Entrepreneur', 'Restaurant Chain Owner', 'Civil Engineer & Contractor',
+  'Electronics Store Distributor', 'Pharmaceutical Consultant', 'Automobile Dealer'
+];
+
+const CITIES_LOCATIONS = [
+  'Andheri West, Mumbai', 'Sector 17, Vashi, Navi Mumbai', 'GIDC Commercial Hub, Bhiwandi, Thane',
+  'Green Meadows, Chembur, Mumbai', 'Baner Road, Pune', 'Koramangala, Bengaluru',
+  'Bandra BKC, Mumbai', 'Jubilee Hills, Hyderabad', 'T. Nagar, Chennai'
+];
+
+const PROPERTY_DESCRIPTIONS = [
+  'Commercial Shop Premises (450 sq ft)', 'Residential 2BHK Apartment', 'Industrial Warehouse Unit',
+  'Commercial Office Space (800 sq ft)', 'Prime Commercial Plot'
+];
+
+const GOLD_DESCRIPTIONS = [
+  '22 Karat Gold Ornaments (Necklace set & bangles)', '24 Karat Investment Gold Coins (100 grams)',
+  '22 Karat Gold Temple Jewellery Collection'
+];
+
+const VEHICLE_DESCRIPTIONS = [
+  'Eicher Commercial Goods Carrier Heavy Vehicle', 'Mahindra Commercial Pickup Truck',
+  'Tata Commercial Fleet Van'
+];
+
+function getRandomItem<T>(array: T[]): T {
+  return array[Math.floor(Math.random() * array.length)];
+}
+
+function getRandomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getRandomFloat(min: number, max: number, decimals = 2): number {
+  const rand = Math.random() * (max - min) + min;
+  return Number(rand.toFixed(decimals));
+}
+
+// Track used unique keys to ensure zero constraint collisions during seeding
+const usedAadhaars = new Set<string>();
+const usedPans = new Set<string>();
+const usedMobiles = new Set<string>();
+
+function generateUniqueAadhaar(): string {
+  let aadhaar: string;
+  do {
+    const part1 = getRandomInt(1000, 9999);
+    const part2 = getRandomInt(1000, 9999);
+    const part3 = getRandomInt(1000, 9999);
+    aadhaar = `${part1} ${part2} ${part3}`;
+  } while (usedAadhaars.has(aadhaar));
+  usedAadhaars.add(aadhaar);
+  return aadhaar;
+}
+
+function generateUniquePAN(): string {
+  let pan: string;
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  do {
+    let prefix = '';
+    for (let i = 0; i < 5; i++) {
+      prefix += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    const digits = String(getRandomInt(1000, 9999));
+    const suffix = letters.charAt(Math.floor(Math.random() * letters.length));
+    pan = `${prefix}${digits}${suffix}`;
+  } while (usedPans.has(pan));
+  usedPans.add(pan);
+  return pan;
+}
+
+function generateUniqueMobile(): string {
+  let mobile: string;
+  do {
+    mobile = `+91 ${getRandomInt(90000, 99999)} ${getRandomInt(10000, 99999)}`;
+  } while (usedMobiles.has(mobile));
+  usedMobiles.add(mobile);
+  return mobile;
+}
+
+async function main() {
+  console.log('⚡ Dynamic Database Seeding Engine Started...');
+  console.log(`📊 Generating dynamic dataset: ${SEED_CONFIG.customerCount} customers, ${SEED_CONFIG.loanCount} loans.`);
+
+  // 1. Dynamic System Settings
+  console.log('⚙️ Initializing System Settings...');
   await prisma.systemSettings.upsert({
     where: { id: 'default-settings' },
     update: {
-      companyName: 'ABS Finance Management Ltd.',
-      address: 'Suite 401, Financial Tower, Bandra Kurla Complex, Mumbai 400051',
-      gstNumber: '27AAACA1234B1Z9',
-      contactPhone: '+91 98765 43210',
-      contactEmail: 'contact@absfinance.com',
-      loanPrefix: 'LN-2026',
-      receiptPrefix: 'REC-2026',
+      companyName: SEED_CONFIG.companyName,
+      address: SEED_CONFIG.companyAddress,
+      gstNumber: SEED_CONFIG.gstNumber,
+      contactPhone: SEED_CONFIG.contactPhone,
+      contactEmail: SEED_CONFIG.contactEmail,
+      loanPrefix: SEED_CONFIG.loanPrefix,
+      receiptPrefix: SEED_CONFIG.receiptPrefix,
       defaultPenalty: 2.0,
       gracePeriodDays: 5,
       financialYear: '2026-2027',
@@ -24,13 +133,13 @@ async function main() {
     },
     create: {
       id: 'default-settings',
-      companyName: 'ABS Finance Management Ltd.',
-      address: 'Suite 401, Financial Tower, Bandra Kurla Complex, Mumbai 400051',
-      gstNumber: '27AAACA1234B1Z9',
-      contactPhone: '+91 98765 43210',
-      contactEmail: 'contact@absfinance.com',
-      loanPrefix: 'LN-2026',
-      receiptPrefix: 'REC-2026',
+      companyName: SEED_CONFIG.companyName,
+      address: SEED_CONFIG.companyAddress,
+      gstNumber: SEED_CONFIG.gstNumber,
+      contactPhone: SEED_CONFIG.contactPhone,
+      contactEmail: SEED_CONFIG.contactEmail,
+      loanPrefix: SEED_CONFIG.loanPrefix,
+      receiptPrefix: SEED_CONFIG.receiptPrefix,
       defaultPenalty: 2.0,
       gracePeriodDays: 5,
       financialYear: '2026-2027',
@@ -38,62 +147,36 @@ async function main() {
     },
   });
 
-  // 2. Users
-  const pwdHash = await bcrypt.hash('admin123', 10);
-  
-  const superAdmin = await prisma.user.upsert({
-    where: { username: 'admin' },
-    update: {},
-    create: {
-      username: 'admin',
-      passwordHash: pwdHash,
-      name: 'Super Admin',
-      email: 'admin@absfinance.com',
-      role: 'SUPER_ADMIN',
-      branch: 'Main Mumbai HQ',
-    },
-  });
+  // 2. Dynamic Users & Role Accounts
+  console.log('👥 Initializing Enterprise User Roles...');
+  const pwdHash = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 10);
 
-  await prisma.user.upsert({
-    where: { username: 'accountant' },
-    update: {},
-    create: {
-      username: 'accountant',
-      passwordHash: pwdHash,
-      name: 'Suresh Iyer',
-      email: 'suresh.accountant@absfinance.com',
-      role: 'ACCOUNTANT',
-      branch: 'Main Mumbai HQ',
-    },
-  });
+  const usersData = [
+    { username: 'admin', name: 'Super Admin', email: 'admin@absfinance.com', role: 'SUPER_ADMIN', branch: 'Main Mumbai HQ' },
+    { username: 'accountant', name: 'Suresh Iyer', email: 'suresh.accountant@absfinance.com', role: 'ACCOUNTANT', branch: 'Main Mumbai HQ' },
+    { username: 'collector', name: 'Ramesh Pawar', email: 'ramesh.collector@absfinance.com', role: 'COLLECTION_OFFICER', branch: 'Andheri West Branch' },
+    { username: 'officer_rahul', name: 'Rahul Mehta', email: 'rahul.mehta@absfinance.com', role: 'LOAN_OFFICER', branch: 'Bandra BKC Branch' },
+  ];
 
-  await prisma.user.upsert({
-    where: { username: 'collector' },
-    update: {},
-    create: {
-      username: 'collector',
-      passwordHash: pwdHash,
-      name: 'Ramesh Pawar',
-      email: 'ramesh.collector@absfinance.com',
-      role: 'COLLECTION_OFFICER',
-      branch: 'Andheri West Branch',
-    },
-  });
+  const createdUsers: Record<string, any> = {};
+  for (const user of usersData) {
+    const createdUser = await prisma.user.upsert({
+      where: { username: user.username },
+      update: {},
+      create: {
+        username: user.username,
+        passwordHash: pwdHash,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        branch: user.branch,
+      },
+    });
+    createdUsers[user.username] = createdUser;
+  }
 
-  await prisma.user.upsert({
-    where: { username: 'officer_rahul' },
-    update: {},
-    create: {
-      username: 'officer_rahul',
-      passwordHash: pwdHash,
-      name: 'Rahul Mehta',
-      email: 'rahul.mehta@absfinance.com',
-      role: 'LOAN_OFFICER',
-      branch: 'Bandra BKC Branch',
-    },
-  });
-
-  // 3. LTV Interest Slabs (Mortgage Collateral Risk Engine)
+  // 3. Dynamic LTV Interest Slabs
+  console.log('📈 Setting up LTV Interest Slabs...');
   await prisma.lTVInterestSlab.deleteMany({});
   await prisma.lTVInterestSlab.createMany({
     data: [
@@ -104,7 +187,8 @@ async function main() {
     ],
   });
 
-  // 4. Amount Interest Slabs
+  // 4. Dynamic Amount Interest Slabs
+  console.log('💰 Setting up Amount Interest Slabs...');
   await prisma.interestSlab.deleteMany({});
   await prisma.interestSlab.createMany({
     data: [
@@ -115,7 +199,8 @@ async function main() {
     ],
   });
 
-  // 5. Bank & Cash Accounts
+  // 5. Dynamic Financial Bank & Cash Accounts
+  console.log('🏦 Initializing Bank & Cash Accounts...');
   const hdfcBank = await prisma.bankAccount.upsert({
     where: { accountNumber: '50200012345678' },
     update: { currentBalance: 4250000 },
@@ -156,272 +241,210 @@ async function main() {
     },
   });
 
-  // 6. Customers
+  // Clean old dependent operational tables before generating dynamic dataset
+  console.log('🧹 Clearing past dynamic collections, loans, and customer records...');
+  await prisma.ledgerEntry.deleteMany({});
+  await prisma.income.deleteMany({});
+  await prisma.expense.deleteMany({});
+  await prisma.collection.deleteMany({});
+  await prisma.mortgageDetail.deleteMany({});
+  await prisma.loan.deleteMany({});
   await prisma.customer.deleteMany({});
 
-  const cust1 = await prisma.customer.create({
-    data: {
-      customerId: 'CUST-1001',
-      name: 'Rajesh Kumar',
-      mobile: '+91 98200 11223',
-      aadhaar: '4532 8901 2345',
-      pan: 'ABCDE1234F',
-      address: 'Flat 302, Sunrise Apartments, Andheri West, Mumbai',
-      occupation: 'Retail Textile Business Owner',
-      nomineeName: 'Sunita Kumar',
-      nomineeRelation: 'Wife',
-      nomineeMobile: '+91 98200 11224',
-      remarks: 'Existing reliable client, 3 previous closed loans',
-    },
-  });
+  // 6. Dynamic Customers Generator
+  console.log(`👤 Generating ${SEED_CONFIG.customerCount} dynamic customers...`);
+  const createdCustomers: any[] = [];
 
-  const cust2 = await prisma.customer.create({
-    data: {
-      customerId: 'CUST-1002',
-      name: 'Priya Sharma',
-      mobile: '+91 98700 33445',
-      aadhaar: '8901 2345 6789',
-      pan: 'PQRSW5678K',
-      address: 'Plot 45, Sector 17, Vashi, Navi Mumbai',
-      occupation: 'Senior Software Architect',
-      nomineeName: 'Amit Sharma',
-      nomineeRelation: 'Husband',
-      nomineeMobile: '+91 98700 33446',
-      remarks: 'Pledged Gold Ornaments as collateral',
-    },
-  });
+  for (let i = 1; i <= SEED_CONFIG.customerCount; i++) {
+    const firstName = getRandomItem(FIRST_NAMES);
+    const lastName = getRandomItem(LAST_NAMES);
+    const nomineeFirstName = getRandomItem(FIRST_NAMES);
+    const nomineeLastName = lastName;
+    const riskScore = getRandomFloat(60, 98);
+    const riskCategory = riskScore > 85 ? 'LOW' : riskScore > 70 ? 'MEDIUM' : 'HIGH';
 
-  const cust3 = await prisma.customer.create({
-    data: {
-      customerId: 'CUST-1003',
-      name: 'Ankit Patel',
-      mobile: '+91 99300 55667',
-      aadhaar: '1234 5678 9012',
-      pan: 'LMNOP9012M',
-      address: 'Shop 12, GIDC Commercial Hub, Bhiwandi, Thane',
-      occupation: 'Logistics & Fleet Operator',
-      nomineeName: 'Meena Patel',
-      nomineeRelation: 'Mother',
-      nomineeMobile: '+91 99300 55668',
-      remarks: 'Commercial Eicher Truck mortgaged',
-    },
-  });
+    const customer = await prisma.customer.create({
+      data: {
+        customerId: `CUST-${1000 + i}`,
+        name: `${firstName} ${lastName}`,
+        mobile: generateUniqueMobile(),
+        aadhaar: generateUniqueAadhaar(),
+        pan: generateUniquePAN(),
+        address: `Plot ${getRandomInt(1, 100)}, ${getRandomItem(CITIES_LOCATIONS)}`,
+        occupation: getRandomItem(OCCUPATIONS),
+        nomineeName: `${nomineeFirstName} ${nomineeLastName}`,
+        nomineeRelation: getRandomItem(['Spouse', 'Father', 'Mother', 'Brother']),
+        nomineeMobile: generateUniqueMobile(),
+        riskScore,
+        riskCategory,
+        remarks: `Dynamically generated verified client record (Score: ${riskScore})`,
+      },
+    });
+    createdCustomers.push(customer);
+  }
 
-  const cust4 = await prisma.customer.create({
-    data: {
-      customerId: 'CUST-1004',
-      name: 'Sunita Verma',
-      mobile: '+91 97100 77889',
-      aadhaar: '6789 0123 4567',
-      pan: 'JKLM7890N',
-      address: 'Villa 8, Green Meadows, Chembur, Mumbai',
-      occupation: 'Healthcare Entrepreneur',
-      nomineeName: 'Dr. Ramesh Verma',
-      nomineeRelation: 'Husband',
-      nomineeMobile: '+91 97100 77890',
-      remarks: 'Residential Villa property document mortgaged',
-    },
-  });
+  // 7. Dynamic Loans & Mortgages Generator
+  console.log(`📋 Generating ${SEED_CONFIG.loanCount} dynamic loans & mortgages...`);
+  const createdLoans: any[] = [];
+  const bankAccounts = [hdfcBank, iciciBank];
 
-  // 7. Loans & Mortgages
-  await prisma.loan.deleteMany({});
+  for (let i = 1; i <= SEED_CONFIG.loanCount; i++) {
+    const customer = getRandomItem(createdCustomers);
+    const assetType = getRandomItem(['PROPERTY', 'GOLD', 'VEHICLE']);
+    const principalAmount = getRandomInt(2, 50) * 100000; // ₹2 Lakhs to ₹50 Lakhs
+    
+    // Dynamic asset valuation & LTV calculation
+    let assetDescription = '';
+    let marketMultiplier = getRandomFloat(1.4, 2.2);
+    if (assetType === 'PROPERTY') {
+      assetDescription = getRandomItem(PROPERTY_DESCRIPTIONS);
+    } else if (assetType === 'GOLD') {
+      assetDescription = getRandomItem(GOLD_DESCRIPTIONS);
+    } else {
+      assetDescription = getRandomItem(VEHICLE_DESCRIPTIONS);
+    }
 
-  const loan1 = await prisma.loan.create({
-    data: {
-      loanNumber: 'LN-2026-001',
-      customerId: cust1.id,
-      loanType: 'MORTGAGE',
-      principalAmount: 1500000,
-      interestType: 'FLAT',
-      interestRate: 12.0,
-      tenureMonths: 24,
-      status: 'ACTIVE',
-      outstandingBalance: 1250000,
-      disbursedFrom: 'BANK',
-      bankAccountId: hdfcBank.id,
-      notes: 'Commercial Shop Premises Mortgaged in Andheri Market.',
-      mortgageDetail: {
-        create: {
-          assetType: 'PROPERTY',
-          assetDescription: 'Commercial Shop No. 5 (350 sq ft) in Andheri Market Complex',
-          estimatedValue: 3000000,
-          marketValue: 3200000,
-          ltvPercentage: 50.0,
+    const estimatedValue = Math.round(principalAmount * marketMultiplier);
+    const marketValue = Math.round(estimatedValue * getRandomFloat(1.02, 1.1));
+    const ltvPercentage = getRandomFloat((principalAmount / estimatedValue) * 100, 2);
+    const tenureMonths = getRandomItem([12, 18, 24, 36, 48]);
+    const interestType = getRandomItem(['FLAT', 'REDUCING']);
+    const interestRate = getRandomFloat(9.5, 14.5);
+    const status = getRandomItem(['ACTIVE', 'ACTIVE', 'ACTIVE', 'OVERDUE', 'CLOSED']);
+    const outstandingBalance = status === 'CLOSED' ? 0 : Math.round(principalAmount * getRandomFloat(0.4, 0.9));
+
+    const disbursedFrom = getRandomItem(['BANK', 'CASH']);
+    const selectedBank = disbursedFrom === 'BANK' ? getRandomItem(bankAccounts) : null;
+
+    const loan = await prisma.loan.create({
+      data: {
+        loanNumber: `${SEED_CONFIG.loanPrefix}-${String(i).padStart(3, '0')}`,
+        customerId: customer.id,
+        loanType: 'MORTGAGE',
+        principalAmount,
+        interestType,
+        interestRate,
+        tenureMonths,
+        status,
+        outstandingBalance,
+        disbursedFrom,
+        bankAccountId: selectedBank?.id || null,
+        notes: `Dynamic ${assetType} mortgaged loan. LTV: ${ltvPercentage}%.`,
+        mortgageDetail: {
+          create: {
+            assetType,
+            assetDescription,
+            estimatedValue,
+            marketValue,
+            ltvPercentage,
+          },
         },
       },
-    },
-  });
+    });
+    createdLoans.push({ ...loan, customer });
+  }
 
-  const loan2 = await prisma.loan.create({
-    data: {
-      loanNumber: 'LN-2026-002',
-      customerId: cust2.id,
-      loanType: 'MORTGAGE',
-      principalAmount: 500000,
-      interestType: 'REDUCING',
-      interestRate: 10.5,
-      tenureMonths: 12,
-      status: 'ACTIVE',
-      outstandingBalance: 410000,
-      disbursedFrom: 'BANK',
-      bankAccountId: iciciBank.id,
-      notes: 'Gold Ornaments (22K 180 grams) sealed in Branch Safe vault.',
-      mortgageDetail: {
-        create: {
-          assetType: 'GOLD',
-          assetDescription: '22 Karat Gold Ornaments (Necklace set & bangles) total 180 grams',
-          estimatedValue: 1200000,
-          marketValue: 1250000,
-          ltvPercentage: 41.6,
+  // 8. Dynamic Collections & Ledger Double-Entry Balances Engine
+  console.log('🧾 Generating dynamic collections and ledger balance logs...');
+  let currentRunningBalance = hdfcBank.currentBalance;
+
+  for (let i = 0; i < createdLoans.length; i++) {
+    const loan = createdLoans[i];
+    if (loan.status === 'CLOSED' || loan.status === 'ACTIVE') {
+      const amountReceived = Math.round(loan.principalAmount * 0.1);
+      const principalPaid = Math.round(amountReceived * 0.8);
+      const interestPaid = amountReceived - principalPaid;
+      const paymentMode = getRandomItem(['BANK_TRANSFER', 'UPI', 'CASH']);
+      const isBank = paymentMode !== 'CASH';
+      const selectedBank = isBank ? getRandomItem(bankAccounts) : null;
+
+      const collection = await prisma.collection.create({
+        data: {
+          collectionId: `${SEED_CONFIG.receiptPrefix}-${100 + i}`,
+          loanId: loan.id,
+          customerId: loan.customerId,
+          amountReceived,
+          principalPaid,
+          interestPaid,
+          penaltyPaid: 0,
+          paymentMode,
+          bankAccountId: selectedBank?.id || null,
+          referenceNo: isBank ? `TXN-${getRandomInt(1000000, 9999999)}` : 'CASH-REC',
+          recordedById: createdUsers.admin.id,
+          notes: `Dynamic installment payment recorded for ${loan.loanNumber}`,
         },
-      },
-    },
-  });
+      });
 
-  const loan3 = await prisma.loan.create({
-    data: {
-      loanNumber: 'LN-2026-003',
-      customerId: cust3.id,
-      loanType: 'MORTGAGE',
-      principalAmount: 800000,
-      interestType: 'FLAT',
-      interestRate: 14.5,
-      tenureMonths: 18,
-      status: 'OVERDUE',
-      outstandingBalance: 720000,
-      disbursedFrom: 'CASH',
-      notes: 'Commercial Eicher Pro 2049 Heavy Vehicle mortgaged.',
-      mortgageDetail: {
-        create: {
-          assetType: 'VEHICLE',
-          assetDescription: 'Eicher Pro 2049 Commercial Goods Carrier (Reg: MH-04-HX-4521)',
-          estimatedValue: 1100000,
-          marketValue: 1150000,
-          ltvPercentage: 72.7,
+      currentRunningBalance += amountReceived;
+
+      // Dynamic Ledger Double-Entry
+      await prisma.ledgerEntry.create({
+        data: {
+          ledgerId: `LEDG-${10000 + i}`,
+          transactionType: 'COLLECTION',
+          referenceNo: collection.collectionId,
+          debit: 0,
+          credit: amountReceived,
+          balanceAfter: currentRunningBalance,
+          bankAccountId: selectedBank?.id || hdfcBank.id,
+          isCash: !isBank,
+          remarks: `Collection received for ${loan.loanNumber} from customer ${loan.customer.name}`,
+          loanId: loan.id,
+          collectionId: collection.id,
         },
-      },
-    },
-  });
+      });
+    }
+  }
 
-  // 8. Collections
-  await prisma.collection.deleteMany({});
-
-  await prisma.collection.create({
-    data: {
-      collectionId: 'REC-2026-101',
-      loanId: loan1.id,
-      customerId: cust1.id,
-      amountReceived: 125000,
-      principalPaid: 100000,
-      interestPaid: 25000,
-      penaltyPaid: 0,
-      paymentMode: 'BANK_TRANSFER',
-      bankAccountId: hdfcBank.id,
-      referenceNo: 'HDFC-NEFT-991204',
-      recordedById: superAdmin.id,
-      notes: 'Installment #1 paid on time via NEFT.',
-    },
-  });
-
-  await prisma.collection.create({
-    data: {
-      collectionId: 'REC-2026-102',
-      loanId: loan2.id,
-      customerId: cust2.id,
-      amountReceived: 45000,
-      principalPaid: 40000,
-      interestPaid: 5000,
-      penaltyPaid: 0,
-      paymentMode: 'UPI',
-      bankAccountId: iciciBank.id,
-      referenceNo: 'UPI/6129881023',
-      recordedById: superAdmin.id,
-      notes: 'EMI #1 cleared via GPay UPI.',
-    },
-  });
-
-  // 9. Master Ledger Entries
-  await prisma.ledgerEntry.deleteMany({});
-
-  await prisma.ledgerEntry.create({
-    data: {
-      ledgerId: 'LEDG-10001',
-      transactionType: 'DISBURSEMENT',
-      referenceNo: 'LN-2026-001',
-      debit: 1500000,
-      credit: 0,
-      balanceAfter: 3500000,
-      bankAccountId: hdfcBank.id,
-      isCash: false,
-      remarks: 'Loan Disbursement for LN-2026-001 to Rajesh Kumar via HDFC Bank',
-      loanId: loan1.id,
-    },
-  });
-
-  await prisma.ledgerEntry.create({
-    data: {
-      ledgerId: 'LEDG-10002',
-      transactionType: 'COLLECTION',
-      referenceNo: 'REC-2026-101',
-      debit: 0,
-      credit: 125000,
-      balanceAfter: 3625000,
-      bankAccountId: hdfcBank.id,
-      isCash: false,
-      remarks: 'Collection received for LN-2026-001 from Rajesh Kumar',
-      loanId: loan1.id,
-    },
-  });
-
-  // 10. Incomes & Expenses
-  await prisma.income.deleteMany({});
+  // 9. Dynamic Income & Expense Entries
+  console.log('📊 Generating dynamic operational incomes and expenses...');
   await prisma.income.create({
     data: {
       incomeNo: 'INC-1001',
       category: 'PROCESSING_FEE',
-      amount: 15000,
+      amount: getRandomInt(10000, 25000),
       paymentMode: 'BANK_TRANSFER',
       bankAccountId: hdfcBank.id,
       isCash: false,
-      referenceNo: 'FEE-99102',
-      remarks: 'Loan processing fee collected for LN-2026-001',
+      referenceNo: `FEE-${getRandomInt(1000, 9999)}`,
+      remarks: 'Dynamic loan processing & documentation fee collected',
     },
   });
 
-  await prisma.expense.deleteMany({});
   await prisma.expense.create({
     data: {
       expenseNo: 'EXP-1001',
       category: 'OFFICE_RENT',
-      amount: 45000,
+      amount: getRandomInt(35000, 50000),
       paymentMode: 'BANK_TRANSFER',
       bankAccountId: hdfcBank.id,
       isCash: false,
-      referenceNo: 'RENT-AUG-2026',
-      remarks: 'Monthly office rent payment for BKC Branch',
+      referenceNo: `RENT-2026-${getRandomInt(10, 99)}`,
+      remarks: 'Dynamic monthly office rent disbursement',
     },
   });
 
-  // 11. Audit Logs
+  // 10. Audit Log
   await prisma.auditLog.create({
     data: {
-      userId: superAdmin.id,
-      username: 'admin',
-      action: 'SEED_INITIALIZATION',
+      userId: createdUsers.admin.id,
+      username: createdUsers.admin.username,
+      action: 'DYNAMIC_SEED_INITIALIZATION',
       module: 'SYSTEM',
-      details: 'Populated TiDB Database with initial enterprise settings, customers, slabs, loans, and accounting records.',
+      details: `Successfully executed dynamic database seeding: generated ${SEED_CONFIG.customerCount} customers, ${SEED_CONFIG.loanCount} loans, and balanced ledger entries.`,
       ipAddress: '127.0.0.1',
     },
   });
 
-  console.log('✅ TiDB Database seeding completed successfully!');
+  console.log('✅ Dynamic database seeding completed successfully!');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Seeding failed:', e);
+    console.error('❌ Dynamic seeding failed:', e);
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
   });
+

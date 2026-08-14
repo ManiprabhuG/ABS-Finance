@@ -62,6 +62,10 @@ model Loan {
   interestType       String          @default("FLAT") // FLAT, REDUCING, MANUAL
   interestRate       Float           // Annual %
   tenureMonths       Int             @default(12)
+  installmentType    String          @default("MONTHLY") // DAILY, WEEKLY, MONTHLY
+  tenureValue        Int             @default(12)
+  totalInterestAmount Float?
+  installmentAmount  Float?
   loanDate           DateTime        @default(now())
   status             String          @default("PENDING") // PENDING, APPROVED, DISBURSED, ACTIVE, OVERDUE, CLOSED, REJECTED
   npaCategory        String          @default("STANDARD") // STANDARD, SUBSTANDARD, DOUBTFUL, NPA

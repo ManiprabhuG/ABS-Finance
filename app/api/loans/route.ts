@@ -64,10 +64,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // BUG-005 FIX: Validate numeric inputs
+    // Validate numeric inputs
     const principal = parseFloat(data.principalAmount);
     const interestRate = parseFloat(data.interestRate);
-    const tenureMonths = parseInt(data.tenureMonths || '12');
+    const installmentType = data.installmentType || 'MONTHLY'; // DAILY, WEEKLY, MONTHLY
+    const tenureVal = parseInt(data.tenureValue || data.tenureMonths || '12');
+    
+    // Compute tenureMonths for backwards compatibility
+    let tenureMonths = tenureVal;
+    if (installmentType === 'DAILY') {
+      tenureMonths = Math.max(1, Math.ceil(tenureVal / 30));
+    } else if (installmentType === 'WEEKLY') {
+      tenureMonths = Math.max(1, Math.ceil(tenureVal / 4.33));
+    }
+
+    const totalInterestAmount = data.totalInterestAmount ? parseFloat(data.totalInterestAmount) : null;
+    const installmentAmount = data.installmentAmount ? parseFloat(data.installmentAmount) : null;
 
     if (isNaN(principal) || principal <= 0) {
       return NextResponse.json({ error: 'Principal amount must be a positive number' }, { status: 400 });
@@ -75,8 +87,8 @@ export async function POST(request: Request) {
     if (isNaN(interestRate) || interestRate < 0 || interestRate > 100) {
       return NextResponse.json({ error: 'Interest rate must be between 0 and 100' }, { status: 400 });
     }
-    if (isNaN(tenureMonths) || tenureMonths <= 0 || tenureMonths > 360) {
-      return NextResponse.json({ error: 'Tenure must be between 1 and 360 months' }, { status: 400 });
+    if (isNaN(tenureVal) || tenureVal <= 0 || tenureVal > 1000) {
+      return NextResponse.json({ error: 'Tenure must be a valid positive number' }, { status: 400 });
     }
 
     const loanNumber = await getNextLoanNumber();
@@ -91,6 +103,10 @@ export async function POST(request: Request) {
           interestType: data.interestType || 'FLAT',
           interestRate,
           tenureMonths,
+          installmentType,
+          tenureValue: tenureVal,
+          totalInterestAmount,
+          installmentAmount,
           status: 'PENDING',
           outstandingBalance: principal,
           notes: data.notes || null,

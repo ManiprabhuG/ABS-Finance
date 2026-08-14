@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useRef, useEffect, useCallback } from 'react';
-import { X, Printer, Download } from 'lucide-react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { X, Printer, Download, Loader2 } from 'lucide-react';
 
 interface PrintPreviewModalProps {
   isOpen: boolean;
@@ -17,8 +17,18 @@ export function PrintPreviewModal({
   printUrl,
 }: PrintPreviewModalProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPrinting, setIsPrinting] = useState(false);
 
-  // BUG-014 FIX: ESC key closes modal
+  // Reset loading state whenever modal opens or printUrl changes
+  useEffect(() => {
+    if (isOpen) {
+      setIsLoading(true);
+      setIsPrinting(false);
+    }
+  }, [isOpen, printUrl]);
+
+  // ESC key closes modal
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -36,28 +46,32 @@ export function PrintPreviewModal({
   if (!isOpen || !printUrl) return null;
 
   const handlePrint = () => {
+    setIsPrinting(true);
     if (iframeRef.current && iframeRef.current.contentWindow) {
       iframeRef.current.contentWindow.focus();
       iframeRef.current.contentWindow.print();
     }
+    setTimeout(() => setIsPrinting(false), 800);
   };
 
-  // BUG-013 FIX: Save as PDF opens iframe URL in new tab so user can use browser Save as PDF
   const handleSaveAsPdf = () => {
+    setIsPrinting(true);
     const pdfWindow = window.open(printUrl, '_blank');
     if (pdfWindow) {
-      // Wait for page to load then trigger print dialog with PDF option
       pdfWindow.addEventListener('load', () => {
         setTimeout(() => {
           pdfWindow.print();
-        }, 500);
+          setIsPrinting(false);
+        }, 300);
       });
+    } else {
+      setIsPrinting(false);
     }
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex flex-col items-center justify-center p-2 sm:p-6 animate-fade-in"
+      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-2 sm:p-6 animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} // Click outside to close
     >
       {/* Modal Container */}
@@ -66,27 +80,34 @@ export function PrintPreviewModal({
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
-              <Printer className="w-5 h-5" />
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+              ) : (
+                <Printer className="w-5 h-5" />
+              )}
             </div>
             <div>
               <h3 className="font-bold text-base text-white">{title}</h3>
-              <p className="text-xs text-slate-400">Live Print & PDF Preview · Press ESC to close</p>
+              <p className="text-xs text-slate-400">
+                {isLoading ? 'Preparing document preview...' : 'Live Print & PDF Preview · Press ESC to close'}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center space-x-3">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs rounded-xl shadow-md flex items-center space-x-2 transition-all"
+              disabled={isLoading || isPrinting}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-xs rounded-xl shadow-md flex items-center space-x-2 transition-all"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print Document</span>
+              {isPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+              <span>{isPrinting ? 'Printing...' : 'Print Document'}</span>
             </button>
 
-            {/* BUG-013 FIX: Save as PDF opens in new tab and triggers print to PDF */}
             <button
               onClick={handleSaveAsPdf}
-              className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs rounded-xl shadow-md flex items-center space-x-2 transition-all"
+              disabled={isLoading || isPrinting}
+              className="px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-medium text-xs rounded-xl shadow-md flex items-center space-x-2 transition-all"
             >
               <Download className="w-4 h-4" />
               <span>Save as PDF</span>
@@ -102,12 +123,28 @@ export function PrintPreviewModal({
           </div>
         </div>
 
-        {/* Modal Body / Iframe */}
-        <div className="flex-1 bg-slate-950 p-4 overflow-hidden flex items-center justify-center">
+        {/* Modal Body / Iframe Container */}
+        <div className="flex-1 bg-slate-950 p-4 overflow-hidden relative flex items-center justify-center">
+          {/* Instant Loading Skeleton */}
+          {isLoading && (
+            <div className="absolute inset-4 z-10 bg-white rounded-2xl p-8 flex flex-col items-center justify-center space-y-4 animate-pulse">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+              </div>
+              <div className="text-slate-800 font-bold text-sm">Generating Print Preview...</div>
+              <div className="w-3/4 h-4 bg-slate-200 rounded"></div>
+              <div className="w-1/2 h-4 bg-slate-200 rounded"></div>
+              <div className="w-2/3 h-4 bg-slate-200 rounded"></div>
+            </div>
+          )}
+
           <iframe
             ref={iframeRef}
             src={printUrl}
-            className="w-full h-full rounded-2xl bg-white border-0 shadow-inner"
+            onLoad={() => setIsLoading(false)}
+            className={`w-full h-full rounded-2xl bg-white border-0 shadow-inner transition-opacity duration-200 ${
+              isLoading ? 'opacity-0' : 'opacity-100'
+            }`}
             title={title}
           />
         </div>
@@ -115,3 +152,4 @@ export function PrintPreviewModal({
     </div>
   );
 }
+

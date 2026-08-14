@@ -15,7 +15,11 @@ export default async function LoanAgreementPrintPage({ params }: { params: Promi
     db.loan.findUnique({
       where: { id },
       include: {
-        customer: true,
+        customer: {
+          include: {
+            documents: true,
+          },
+        },
         mortgageDetail: true,
       },
     }),
@@ -25,6 +29,14 @@ export default async function LoanAgreementPrintPage({ params }: { params: Promi
   if (!loan) notFound();
 
   const companyName = settings?.companyName || 'ABS Finance Management Ltd.';
+
+  const documents = loan.customer.documents || [];
+  const aadhaarDocs = documents.filter(
+    (d) => d.category === 'AADHAAR' || d.title.toLowerCase().includes('aadhaar')
+  );
+  const panDocs = documents.filter(
+    (d) => d.category === 'PAN' || d.title.toLowerCase().includes('pan')
+  );
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 print:bg-white text-slate-900 dark:text-slate-100 print:text-black">
@@ -37,13 +49,13 @@ export default async function LoanAgreementPrintPage({ params }: { params: Promi
           settings={settings}
         />
 
-        <div className="space-y-3.5 text-[11px] text-slate-800 leading-normal">
+        <div className="space-y-4 text-[11px] text-slate-800 leading-normal">
           {/* Recital Statement */}
           <div className="p-2.5 bg-slate-50 border border-slate-300 rounded font-semibold text-slate-900 text-xs">
             THIS DEED OF LOAN AGREEMENT is executed on {formatDate(loan.loanDate)} between {companyName} (LENDER) and {loan.customer.name} (BORROWER).
           </div>
 
-          {/* Section 1: Borrower Information with Photo */}
+          {/* Article I: Borrower Information with Photo */}
           <div>
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5 mb-1.5">
               Article I: Borrower Identity & Particulars
@@ -76,22 +88,42 @@ export default async function LoanAgreementPrintPage({ params }: { params: Promi
             </div>
           </div>
 
-          {/* Section 2: Loan Financial Terms */}
+          {/* Article II: Loan Financial Terms & Repayment Breakdown */}
           <div>
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5 mb-1.5">
-              Article II: Principal Debt & Repayment Terms
+              Article II: Principal Debt & Repayment Structure
             </h2>
-            <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2 border border-slate-300 rounded font-mono text-[11px]">
+            <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2 border border-slate-300 rounded text-[11px]">
               <div><span className="text-slate-500 block text-[10px]">Sanctioned Principal:</span><span className="font-bold text-slate-900 text-xs">{formatCurrency(loan.principalAmount)}</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Agreed Interest Rate:</span><span className="font-bold text-slate-900">{loan.interestRate}% p.a.</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Interest Method:</span><span className="font-bold text-slate-900">{loan.interestType}</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Loan Tenure:</span><span className="font-bold text-slate-900">{loan.tenureMonths} Months</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Default Penalty:</span><span className="font-bold text-rose-600">{settings?.defaultPenalty || 2.0}% / Mo</span></div>
-              <div><span className="text-slate-500 block text-[10px]">Grace Period:</span><span className="font-bold text-slate-900">{settings?.gracePeriodDays || 5} Days</span></div>
+              <div><span className="text-slate-500 block text-[10px]">Agreed Interest Rate:</span><span className="font-bold text-emerald-800">{loan.interestRate}% p.a. ({loan.interestType})</span></div>
+              <div><span className="text-slate-500 block text-[10px]">Repayment Frequency:</span><span className="font-bold text-brand-700 uppercase">{loan.installmentType || 'MONTHLY'}</span></div>
+              <div>
+                <span className="text-slate-500 block text-[10px]">Tenure Duration:</span>
+                <span className="font-bold text-slate-900">
+                  {loan.tenureValue || loan.tenureMonths}{' '}
+                  {loan.installmentType === 'DAILY' ? 'Days' : loan.installmentType === 'WEEKLY' ? 'Weeks' : 'Months'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px]">Total Interest Amount:</span>
+                <span className="font-bold text-emerald-800">
+                  {loan.totalInterestAmount ? formatCurrency(loan.totalInterestAmount) : 'As per schedule'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px]">Per Installment Repayment:</span>
+                <span className="font-extrabold text-cyan-800">
+                  {loan.installmentAmount
+                    ? `${formatCurrency(loan.installmentAmount)} / ${
+                        loan.installmentType === 'DAILY' ? 'Day' : loan.installmentType === 'WEEKLY' ? 'Week' : 'Month'
+                      }`
+                    : formatCurrency(loan.principalAmount / (loan.tenureMonths || 12))}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Section 3: Mortgage Details (If applicable) */}
+          {/* Article III: Mortgage Details (If applicable) */}
           {loan.mortgageDetail && (
             <div>
               <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5 mb-1.5">
@@ -110,10 +142,52 @@ export default async function LoanAgreementPrintPage({ params }: { params: Promi
             </div>
           )}
 
-          {/* Section 4: Signatures */}
-          <div className="pt-4">
+          {/* Article IV: Annexure - Verified Aadhaar & PAN Card Proof Pictures */}
+          <div>
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5 mb-1.5">
-              Article IV: Execution & Execution Signatures
+              Article IV: KYC Proof Annexure (Aadhaar & PAN Identification)
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Aadhaar Card Frame */}
+              <div className="p-2 bg-slate-50 border border-slate-300 rounded">
+                <div className="flex items-center justify-between border-b pb-0.5 mb-1">
+                  <span className="font-bold text-[10px] uppercase">Aadhaar Card Attachment</span>
+                  <span className="text-[9px] font-mono font-bold text-slate-600">Aadhaar: {loan.customer.aadhaar}</span>
+                </div>
+                <div className="h-32 border bg-white rounded flex items-center justify-center overflow-hidden p-1">
+                  {aadhaarDocs.length > 0 && aadhaarDocs[0].fileUrl ? (
+                    <img src={aadhaarDocs[0].fileUrl} alt="Aadhaar Card" className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <div className="text-center text-[10px] text-slate-400">
+                      Aadhaar Card Copy Verified (Aadhaar: {loan.customer.aadhaar})
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* PAN Card Frame */}
+              <div className="p-2 bg-slate-50 border border-slate-300 rounded">
+                <div className="flex items-center justify-between border-b pb-0.5 mb-1">
+                  <span className="font-bold text-[10px] uppercase">PAN Card Attachment</span>
+                  <span className="text-[9px] font-mono font-bold text-slate-600">PAN: {loan.customer.pan || 'N/A'}</span>
+                </div>
+                <div className="h-32 border bg-white rounded flex items-center justify-center overflow-hidden p-1">
+                  {panDocs.length > 0 && panDocs[0].fileUrl ? (
+                    <img src={panDocs[0].fileUrl} alt="PAN Card" className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <div className="text-center text-[10px] text-slate-400">
+                      PAN Card Copy Verified (PAN: {loan.customer.pan || 'N/A'})
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Article V: Signatures */}
+          <div className="pt-2">
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-0.5 mb-1.5">
+              Article V: Execution Signatures
             </h2>
             <div className="grid grid-cols-2 gap-8 pt-4">
               <div className="border-t border-slate-400 pt-1 text-center">

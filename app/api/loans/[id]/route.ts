@@ -45,6 +45,19 @@ export async function PUT(
     // Input validation
     const principal = parseFloat(data.principalAmount);
     const interestRate = parseFloat(data.interestRate);
+    const installmentType = data.installmentType || 'MONTHLY';
+    const tenureVal = parseInt(data.tenureValue || data.tenureMonths || '12');
+
+    let tenureMonths = tenureVal;
+    if (installmentType === 'DAILY') {
+      tenureMonths = Math.max(1, Math.ceil(tenureVal / 30));
+    } else if (installmentType === 'WEEKLY') {
+      tenureMonths = Math.max(1, Math.ceil(tenureVal / 4.33));
+    }
+
+    const totalInterestAmount = data.totalInterestAmount ? parseFloat(data.totalInterestAmount) : null;
+    const installmentAmount = data.installmentAmount ? parseFloat(data.installmentAmount) : null;
+
     if (isNaN(principal) || principal <= 0) {
       return NextResponse.json({ error: 'Principal amount must be a positive number' }, { status: 400 });
     }
@@ -60,7 +73,11 @@ export async function PUT(
           principalAmount: principal,
           interestType: data.interestType,
           interestRate,
-          tenureMonths: parseInt(data.tenureMonths || '12'),
+          tenureMonths,
+          installmentType,
+          tenureValue: tenureVal,
+          totalInterestAmount,
+          installmentAmount,
           notes: data.notes || null,
           status: data.status || undefined,
         },

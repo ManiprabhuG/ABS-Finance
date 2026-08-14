@@ -1,7 +1,25 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Plus, Search, Building, ShieldCheck, CheckCircle2, DollarSign, X, Eye, Edit, Trash2, Printer, FileText } from 'lucide-react';
+import {
+  CreditCard,
+  Plus,
+  Search,
+  Building,
+  ShieldCheck,
+  CheckCircle2,
+  DollarSign,
+  X,
+  Eye,
+  Edit,
+  Trash2,
+  Printer,
+  FileText,
+  Calculator,
+  Calendar,
+  Clock,
+  Loader2,
+} from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/export-utils';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
 
@@ -10,6 +28,8 @@ export default function LoansPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDisbursing, setIsDisbursing] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showDisburseModal, setShowDisburseModal] = useState<any | null>(null);
@@ -21,13 +41,15 @@ export default function LoansPage() {
     url: '',
   });
 
-  // Form State
+  // Form State with Installment Concepts
   const [formData, setFormData] = useState({
     customerId: '',
     loanType: 'MORTGAGE',
     principalAmount: '',
     interestType: 'FLAT',
     interestRate: '12.0',
+    installmentType: 'MONTHLY', // DAILY, WEEKLY, MONTHLY
+    tenureValue: '12',
     tenureMonths: '12',
     notes: '',
     // Mortgage details
@@ -68,6 +90,46 @@ export default function LoansPage() {
     fetchLoans();
   }, []);
 
+  // Calculation Helper for Interest & Repayment Breakdown
+  const getRepaymentCalc = () => {
+    const principal = parseFloat(formData.principalAmount) || 0;
+    const rate = parseFloat(formData.interestRate) || 0;
+    const tenureVal = parseInt(formData.tenureValue) || 1;
+    const type = formData.installmentType || 'MONTHLY';
+
+    let tenureYears = tenureVal / 12;
+    let label = 'Month';
+    let unitLabel = 'Months';
+
+    if (type === 'DAILY') {
+      tenureYears = tenureVal / 365;
+      label = 'Day';
+      unitLabel = 'Days';
+    } else if (type === 'WEEKLY') {
+      tenureYears = tenureVal / 52;
+      label = 'Week';
+      unitLabel = 'Weeks';
+    }
+
+    const totalInterest = Math.round(principal * (rate / 100) * tenureYears);
+    const totalRepayment = principal + totalInterest;
+    const perInstallment = tenureVal > 0 ? Math.round(totalRepayment / tenureVal) : 0;
+
+    return {
+      principal,
+      rate,
+      tenureVal,
+      type,
+      label,
+      unitLabel,
+      totalInterest,
+      totalRepayment,
+      perInstallment,
+    };
+  };
+
+  const calc = getRepaymentCalc();
+
   const handleOpenEditLoan = (loan: any) => {
     setEditingLoan(loan);
     setFormData({
@@ -76,6 +138,8 @@ export default function LoansPage() {
       principalAmount: loan.principalAmount?.toString() || '',
       interestType: loan.interestType || 'FLAT',
       interestRate: loan.interestRate?.toString() || '12.0',
+      installmentType: loan.installmentType || 'MONTHLY',
+      tenureValue: loan.tenureValue?.toString() || loan.tenureMonths?.toString() || '12',
       tenureMonths: loan.tenureMonths?.toString() || '12',
       notes: loan.notes || '',
       assetType: loan.mortgageDetail?.assetType || 'PROPERTY',
@@ -123,14 +187,21 @@ export default function LoansPage() {
 
   const handleSubmitLoan = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const url = editingLoan ? `/api/loans/${editingLoan.id}` : '/api/loans';
       const method = editingLoan ? 'PUT' : 'POST';
 
+      const payload = {
+        ...formData,
+        totalInterestAmount: calc.totalInterest,
+        installmentAmount: calc.perInstallment,
+      };
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -143,11 +214,14 @@ export default function LoansPage() {
       }
     } catch (e: any) {
       alert(e.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDisburseLoan = async () => {
     if (!showDisburseModal) return;
+    setIsDisbursing(true);
     try {
       const res = await fetch(`/api/loans/${showDisburseModal.id}/disburse`, {
         method: 'POST',
@@ -167,6 +241,8 @@ export default function LoansPage() {
       }
     } catch (e: any) {
       alert(e.message);
+    } finally {
+      setIsDisbursing(false);
     }
   };
 
@@ -176,29 +252,48 @@ export default function LoansPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-brand-600" /> Loan Management & Origination
+            <CreditCard className="w-6 h-6 text-brand-600" /> Loan Origination & Management
           </h1>
           <p className="text-xs text-slate-500">
-            Process Mortgage Loans, Normal Loans, LTV Slab Interest Suggestion, and Master Ledger Disbursement.
+            Process Mortgage & Personal Loans with Days-wise, Weekly, and Monthly Interest Amount calculations.
           </p>
         </div>
 
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            setEditingLoan(null);
+            setFormData({
+              customerId: '',
+              loanType: 'MORTGAGE',
+              principalAmount: '',
+              interestType: 'FLAT',
+              interestRate: '12.0',
+              installmentType: 'MONTHLY',
+              tenureValue: '12',
+              tenureMonths: '12',
+              notes: '',
+              assetType: 'PROPERTY',
+              assetDescription: '',
+              assetValue: '',
+              marketValue: '',
+            });
+            setShowModal(true);
+          }}
           className="px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm rounded-xl shadow-md transition-all flex items-center space-x-2"
         >
           <Plus className="w-4 h-4" />
-          <span>Create Loan Request</span>
+          <span>Create Loan Application</span>
         </button>
       </div>
 
-      {/* BUG-009 FIX: Show fetch errors as a visible banner instead of silent console.error */}
       {fetchError && (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl px-4 py-3 flex items-center space-x-2 text-rose-400 text-sm">
             <span className="font-bold">⚠ Error:</span>
             <span>{fetchError}</span>
-            <button onClick={fetchLoans} className="ml-auto text-xs underline hover:no-underline">Retry</button>
+            <button onClick={fetchLoans} className="ml-auto text-xs underline hover:no-underline">
+              Retry
+            </button>
           </div>
         </div>
       )}
@@ -211,9 +306,9 @@ export default function LoansPage() {
               <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold text-xs uppercase tracking-wider">
                 <th className="p-4">Loan Number</th>
                 <th className="p-4">Customer</th>
-                <th className="p-4">Type & Interest</th>
-                <th className="p-4">Principal Amount</th>
-                <th className="p-4">Outstanding Balance</th>
+                <th className="p-4">Frequency & Rate</th>
+                <th className="p-4">Principal & Interest</th>
+                <th className="p-4">Repayment / Installment</th>
                 <th className="p-4">Status</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
@@ -222,7 +317,10 @@ export default function LoansPage() {
               {loading ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-500 text-sm">
-                    Loading loan records...
+                    <div className="flex items-center justify-center space-x-2">
+                      <Loader2 className="w-5 h-5 animate-spin text-brand-600" />
+                      <span>Loading loan records...</span>
+                    </div>
                   </td>
                 </tr>
               ) : loans.length === 0 ? (
@@ -243,18 +341,39 @@ export default function LoansPage() {
                     </td>
                     <td className="p-4 text-xs">
                       <div className="font-semibold text-slate-800 dark:text-slate-200">{l.loanType} LOAN</div>
-                      <div className="text-slate-500">{l.interestRate}% ({l.interestType})</div>
-                      {l.mortgageDetail && (
-                        <div className="text-violet-600 font-semibold mt-0.5">
-                          LTV: {l.mortgageDetail.ltvPercentage}%
+                      <div className="text-slate-500">
+                        {l.interestRate}% p.a. ({l.interestType})
+                      </div>
+                      <div className="text-brand-600 dark:text-brand-400 font-medium mt-0.5">
+                        {l.installmentType || 'MONTHLY'} ({l.tenureValue || l.tenureMonths}{' '}
+                        {l.installmentType === 'DAILY' ? 'Days' : l.installmentType === 'WEEKLY' ? 'Weeks' : 'Months'})
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="font-bold text-slate-900 dark:text-slate-100">
+                        {formatCurrency(l.principalAmount)}
+                      </div>
+                      {l.totalInterestAmount && (
+                        <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                          + {formatCurrency(l.totalInterestAmount)} Interest
                         </div>
                       )}
                     </td>
-                    <td className="p-4 font-bold text-slate-900 dark:text-slate-100">
-                      {formatCurrency(l.principalAmount)}
-                    </td>
-                    <td className="p-4 font-bold text-cyan-600 dark:text-cyan-400">
-                      {formatCurrency(l.outstandingBalance)}
+                    <td className="p-4">
+                      {l.installmentAmount ? (
+                        <div>
+                          <div className="font-extrabold text-cyan-600 dark:text-cyan-400">
+                            {formatCurrency(l.installmentAmount)}
+                          </div>
+                          <div className="text-[10px] text-slate-500 uppercase font-semibold">
+                            / {l.installmentType === 'DAILY' ? 'Day' : l.installmentType === 'WEEKLY' ? 'Week' : 'Month'}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="font-bold text-cyan-600 dark:text-cyan-400">
+                          {formatCurrency(l.outstandingBalance)}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4">
                       <span
@@ -288,18 +407,30 @@ export default function LoansPage() {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => setPrintModal({ isOpen: true, title: `Loan Agreement - ${l.loanNumber}`, url: `/print/loan-agreement/${l.id}` })}
+                          onClick={() =>
+                            setPrintModal({
+                              isOpen: true,
+                              title: `Loan Application Form - ${l.loanNumber}`,
+                              url: `/print/loan-application/${l.id}`,
+                            })
+                          }
+                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-violet-600 dark:text-violet-400 transition-colors"
+                          title="Print Loan Application Form"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setPrintModal({
+                              isOpen: true,
+                              title: `Loan Agreement - ${l.loanNumber}`,
+                              url: `/print/loan-agreement/${l.id}`,
+                            })
+                          }
                           className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-emerald-600 dark:text-emerald-400 transition-colors"
                           title="Print Legal Loan Agreement"
                         >
                           <Printer className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setPrintModal({ isOpen: true, title: `Loan Ledger Statement - ${l.loanNumber}`, url: `/print/loan-statement/${l.id}` })}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 dark:text-blue-400 transition-colors"
-                          title="Print Loan Ledger Statement"
-                        >
-                          <FileText className="w-4 h-4" />
                         </button>
                         {l.status === 'PENDING' && (
                           <button
@@ -319,20 +450,21 @@ export default function LoansPage() {
         </div>
       </div>
 
-      {/* Loan Creation Modal */}
+      {/* Loan Creation / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-3xl w-full p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-brand-600" /> Create New Loan Application
+                <CreditCard className="w-5 h-5 text-brand-600" />
+                {editingLoan ? `Edit Loan Record (${editingLoan.loanNumber})` : 'Create New Loan Application'}
               </h2>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitLoan} className="space-y-4 text-sm">
+            <form onSubmit={handleSubmitLoan} className="space-y-5 text-sm">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold mb-1">Select Customer *</label>
@@ -364,7 +496,73 @@ export default function LoansPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Installment Type / Repayment Frequency Selector */}
+              <div className="p-4 rounded-2xl bg-brand-500/5 border border-brand-500/20 space-y-3">
+                <label className="block text-xs font-bold text-brand-700 dark:text-brand-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-brand-600" /> Repayment Frequency & Installment Type *
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        installmentType: 'DAILY',
+                        tenureValue: formData.installmentType === 'DAILY' ? formData.tenureValue : '100',
+                      })
+                    }
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 ${
+                      formData.installmentType === 'DAILY'
+                        ? 'bg-brand-600 text-white border-brand-600 shadow-md ring-2 ring-brand-500/30'
+                        : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400'
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4" />
+                    <span>Days Wise (Daily)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        installmentType: 'WEEKLY',
+                        tenureValue: formData.installmentType === 'WEEKLY' ? formData.tenureValue : '24',
+                      })
+                    }
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 ${
+                      formData.installmentType === 'WEEKLY'
+                        ? 'bg-brand-600 text-white border-brand-600 shadow-md ring-2 ring-brand-500/30'
+                        : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span>Weekly Installment</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        installmentType: 'MONTHLY',
+                        tenureValue: formData.installmentType === 'MONTHLY' ? formData.tenureValue : '12',
+                      })
+                    }
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 ${
+                      formData.installmentType === 'MONTHLY'
+                        ? 'bg-brand-600 text-white border-brand-600 shadow-md ring-2 ring-brand-500/30'
+                        : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>Monthly Installment</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Principal Amount, Duration & Interest Rate */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-semibold mb-1">Principal Amount (₹) *</label>
                   <input
@@ -372,10 +570,11 @@ export default function LoansPage() {
                     required
                     value={formData.principalAmount}
                     onChange={(e) => setFormData({ ...formData, principalAmount: e.target.value })}
-                    placeholder="e.g. 500000"
+                    placeholder="e.g. 100000"
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold"
                   />
                 </div>
+
                 <div>
                   <label className="block text-xs font-semibold mb-1">Interest Type *</label>
                   <select
@@ -388,6 +587,7 @@ export default function LoansPage() {
                     <option value="MANUAL">Manual Interest</option>
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-xs font-semibold mb-1">Interest Rate (% p.a.) *</label>
                   <input
@@ -398,6 +598,66 @@ export default function LoansPage() {
                     onChange={(e) => setFormData({ ...formData, interestRate: e.target.value })}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold text-emerald-600"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1">
+                    Tenure Duration ({calc.unitLabel}) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={formData.tenureValue}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        tenureValue: e.target.value,
+                        tenureMonths: e.target.value,
+                      })
+                    }
+                    placeholder={`e.g. ${formData.installmentType === 'DAILY' ? '100' : formData.installmentType === 'WEEKLY' ? '24' : '12'}`}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold text-brand-600"
+                  />
+                </div>
+              </div>
+
+              {/* Dynamic Interest & Repayment Summary Calculator Card */}
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Calculator className="w-4 h-4 text-emerald-600" /> Dynamic Interest & Repayment Calculator
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-500 bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full border">
+                    {calc.tenureVal} {calc.unitLabel} ({calc.type})
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-500/20">
+                    <span className="text-slate-500 block text-[10px]">Principal Debt</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                      {formatCurrency(calc.principal)}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-500/20">
+                    <span className="text-slate-500 block text-[10px]">Total Interest Amount</span>
+                    <span className="font-extrabold text-emerald-600 text-sm">
+                      + {formatCurrency(calc.totalInterest)}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-500/20">
+                    <span className="text-slate-500 block text-[10px]">Net Repayment Amount</span>
+                    <span className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">
+                      {formatCurrency(calc.totalRepayment)}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-emerald-600 text-white shadow-md">
+                    <span className="text-emerald-100 block text-[10px]">Per Installment ({calc.label})</span>
+                    <span className="font-black text-sm">{formatCurrency(calc.perInstallment)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -468,7 +728,9 @@ export default function LoansPage() {
                       </div>
                       <div className="text-right">
                         <span className="text-[11px] text-slate-400 block">{ltvSuggestion.matchedSlabName}</span>
-                        <span className="font-bold text-emerald-600">Suggested Rate: {ltvSuggestion.suggestedInterestRate}% p.a.</span>
+                        <span className="font-bold text-emerald-600">
+                          Suggested Rate: {ltvSuggestion.suggestedInterestRate}% p.a.
+                        </span>
                       </div>
                     </div>
                   )}
@@ -485,9 +747,11 @@ export default function LoansPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-medium shadow-md"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-medium shadow-md transition flex items-center space-x-2"
                 >
-                  Create Loan Application
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{isSubmitting ? 'Saving Application...' : 'Save Loan Application'}</span>
                 </button>
               </div>
             </form>
@@ -572,9 +836,11 @@ export default function LoansPage() {
                 </button>
                 <button
                   onClick={handleDisburseLoan}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-md"
+                  disabled={isDisbursing}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium shadow-md flex items-center space-x-2"
                 >
-                  Confirm & Post Disbursement
+                  {isDisbursing && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{isDisbursing ? 'Processing...' : 'Confirm & Post Disbursement'}</span>
                 </button>
               </div>
             </div>
@@ -582,20 +848,21 @@ export default function LoansPage() {
         </div>
       )}
 
-      {/* View Loan Details Modal */}
+      {/* View Loan Details Modal Drawer */}
       {selectedViewLoan && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-end">
           <div className="bg-white dark:bg-slate-900 w-full max-w-xl h-full p-6 overflow-y-auto shadow-2xl border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
               <div>
-                <span className="text-xs font-mono font-bold text-brand-600">
-                  {selectedViewLoan.loanNumber}
-                </span>
+                <span className="text-xs font-mono font-bold text-brand-600">{selectedViewLoan.loanNumber}</span>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
                   {selectedViewLoan.customer?.name}
                 </h2>
               </div>
-              <button onClick={() => setSelectedViewLoan(null)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+              <button
+                onClick={() => setSelectedViewLoan(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
                 <X className="w-5 h-5 text-slate-400" />
               </button>
             </div>
@@ -603,28 +870,60 @@ export default function LoansPage() {
             <div className="mt-4 space-y-6 text-sm">
               <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl">
                 <div>
-                  <div className="text-xs text-slate-500">Loan Type</div>
+                  <div className="text-xs text-slate-500">Loan Type & Frequency</div>
                   <div className="font-semibold">{selectedViewLoan.loanType} LOAN</div>
+                  <div className="text-xs text-brand-600 font-bold uppercase mt-0.5">
+                    {selectedViewLoan.installmentType || 'MONTHLY'} ({selectedViewLoan.tenureValue || selectedViewLoan.tenureMonths}{' '}
+                    {selectedViewLoan.installmentType === 'DAILY' ? 'Days' : selectedViewLoan.installmentType === 'WEEKLY' ? 'Weeks' : 'Months'})
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Principal Amount</div>
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100">{formatCurrency(selectedViewLoan.principalAmount)}</div>
+                  <div className="font-extrabold text-slate-900 dark:text-slate-100">
+                    {formatCurrency(selectedViewLoan.principalAmount)}
+                  </div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500">Interest Rate</div>
-                  <div className="font-semibold text-emerald-600">{selectedViewLoan.interestRate}% p.a. ({selectedViewLoan.interestType})</div>
+                  <div className="text-xs text-slate-500">Interest Rate & Total</div>
+                  <div className="font-semibold text-emerald-600">
+                    {selectedViewLoan.interestRate}% p.a. ({selectedViewLoan.interestType})
+                  </div>
+                  {selectedViewLoan.totalInterestAmount && (
+                    <div className="text-xs font-bold text-emerald-600">
+                      Total Interest: {formatCurrency(selectedViewLoan.totalInterestAmount)}
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500">Outstanding Balance</div>
-                  <div className="font-extrabold text-cyan-600">{formatCurrency(selectedViewLoan.outstandingBalance)}</div>
+                  <div className="text-xs text-slate-500">Installment Repayment</div>
+                  {selectedViewLoan.installmentAmount ? (
+                    <div className="font-extrabold text-cyan-600">
+                      {formatCurrency(selectedViewLoan.installmentAmount)} /{' '}
+                      {selectedViewLoan.installmentType === 'DAILY' ? 'Day' : selectedViewLoan.installmentType === 'WEEKLY' ? 'Week' : 'Month'}
+                    </div>
+                  ) : (
+                    <div className="font-extrabold text-cyan-600">
+                      {formatCurrency(selectedViewLoan.outstandingBalance)}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {selectedViewLoan.mortgageDetail && (
                 <div className="p-4 rounded-2xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/50 space-y-2">
-                  <div className="font-bold text-xs text-violet-900 dark:text-violet-300">Mortgage Collateral Details</div>
-                  <div className="text-xs">Category: <span className="font-semibold">{selectedViewLoan.mortgageDetail.assetType}</span></div>
-                  <div className="text-xs">Valuation: <span className="font-bold">₹{selectedViewLoan.mortgageDetail.estimatedValue?.toLocaleString()}</span> (LTV: {selectedViewLoan.mortgageDetail.ltvPercentage}%)</div>
+                  <div className="font-bold text-xs text-violet-900 dark:text-violet-300">
+                    Mortgage Collateral Details
+                  </div>
+                  <div className="text-xs">
+                    Category: <span className="font-semibold">{selectedViewLoan.mortgageDetail.assetType}</span>
+                  </div>
+                  <div className="text-xs">
+                    Valuation:{' '}
+                    <span className="font-bold">
+                      ₹{selectedViewLoan.mortgageDetail.estimatedValue?.toLocaleString()}
+                    </span>{' '}
+                    (LTV: {selectedViewLoan.mortgageDetail.ltvPercentage}%)
+                  </div>
                   <div className="text-xs text-slate-500">{selectedViewLoan.mortgageDetail.assetDescription}</div>
                 </div>
               )}
@@ -632,7 +931,9 @@ export default function LoansPage() {
               {selectedViewLoan.notes && (
                 <div>
                   <h4 className="font-bold text-xs text-slate-500 mb-1">Notes & Internal Remarks</h4>
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-xs">{selectedViewLoan.notes}</div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-xs">
+                    {selectedViewLoan.notes}
+                  </div>
                 </div>
               )}
             </div>

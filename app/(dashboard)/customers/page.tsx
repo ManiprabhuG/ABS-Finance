@@ -19,6 +19,7 @@ import {
   Upload,
   Paperclip,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/export-utils';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
@@ -166,8 +167,11 @@ export default function CustomersPage() {
     }
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const url = editingCustomer ? `/api/customers/${editingCustomer.id}` : '/api/customers';
       const method = editingCustomer ? 'PUT' : 'POST';
@@ -208,6 +212,8 @@ export default function CustomersPage() {
       }
     } catch (e: any) {
       alert(e.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -656,9 +662,11 @@ export default function CustomersPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-medium shadow-md"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-medium shadow-md transition flex items-center space-x-2"
                 >
-                  Save Customer Record
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{isSubmitting ? 'Saving Customer...' : 'Save Customer Record'}</span>
                 </button>
               </div>
             </form>

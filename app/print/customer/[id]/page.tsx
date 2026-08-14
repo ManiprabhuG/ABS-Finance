@@ -30,6 +30,17 @@ export default async function CustomerPrintPage({ params }: { params: Promise<{ 
   const closedLoans = customer.loans.filter((l) => l.status === 'CLOSED').length;
   const totalOutstanding = customer.loans.reduce((sum, l) => sum + l.outstandingBalance, 0);
 
+  const documents = customer.documents || [];
+  const aadhaarDocs = documents.filter(
+    (d) => d.category === 'AADHAAR' || d.title.toLowerCase().includes('aadhaar')
+  );
+  const panDocs = documents.filter(
+    (d) => d.category === 'PAN' || d.title.toLowerCase().includes('pan')
+  );
+  const otherDocs = documents.filter(
+    (d) => !aadhaarDocs.includes(d) && !panDocs.includes(d)
+  );
+
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 print:bg-white text-slate-900 dark:text-slate-100 print:text-black">
       <PrintToolbar documentTitle={`Customer Profile - ${customer.name}`} />
@@ -122,22 +133,86 @@ export default async function CustomerPrintPage({ params }: { params: Promise<{ 
             </div>
           </div>
 
-          {/* Verification Proof Documents List */}
-          {customer.documents && customer.documents.length > 0 && (
-            <div>
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-1 mb-3">
-                3. Attached KYC & Identity Proof Records
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                {customer.documents.map((doc: any) => (
-                  <div key={doc.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
-                    <span className="font-bold text-slate-900 block truncate">{doc.title}</span>
-                    <span className="text-[10px] text-slate-500 font-mono uppercase">{doc.category}</span>
+          {/* Mandatory KYC Proof Pictures Section */}
+          <div>
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-1 mb-3">
+              3. Verified KYC Identity & Document Proof Pictures
+            </h2>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Aadhaar Card Proof */}
+                <div className="p-3 bg-slate-50 border-2 border-slate-300 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <span className="font-bold text-xs uppercase text-slate-800">Aadhaar Card Proof</span>
+                    <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
+                      Verified KYC
+                    </span>
                   </div>
-                ))}
+                  <div className="text-[11px] text-slate-600 font-mono">Number: {customer.aadhaar}</div>
+                  <div className="h-44 border border-slate-300 bg-white rounded flex items-center justify-center overflow-hidden p-1">
+                    {aadhaarDocs.length > 0 && aadhaarDocs[0].fileUrl ? (
+                      <img
+                        src={aadhaarDocs[0].fileUrl}
+                        alt="Aadhaar Card Proof"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <div className="text-center p-4 text-slate-400">
+                        <div className="font-bold text-xs">Aadhaar Card Attached</div>
+                        <div className="text-[10px]">Aadhaar No: {customer.aadhaar}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* PAN Card Proof */}
+                <div className="p-3 bg-slate-50 border-2 border-slate-300 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <span className="font-bold text-xs uppercase text-slate-800">PAN Card Proof</span>
+                    <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                      Verified Tax ID
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 font-mono">Number: {customer.pan || 'N/A'}</div>
+                  <div className="h-44 border border-slate-300 bg-white rounded flex items-center justify-center overflow-hidden p-1">
+                    {panDocs.length > 0 && panDocs[0].fileUrl ? (
+                      <img
+                        src={panDocs[0].fileUrl}
+                        alt="PAN Card Proof"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <div className="text-center p-4 text-slate-400">
+                        <div className="font-bold text-xs">PAN Card Attached</div>
+                        <div className="text-[10px]">PAN No: {customer.pan || 'N/A'}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {/* Additional Uploaded Documents */}
+              {otherDocs.length > 0 && (
+                <div className="pt-2">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Other Uploaded Identity Proofs:</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {otherDocs.map((doc) => (
+                      <div key={doc.id} className="p-2 border rounded-lg bg-slate-50 space-y-1">
+                        <div className="font-bold text-[11px] text-slate-800 truncate">{doc.title}</div>
+                        <div className="text-[9px] text-slate-500 font-mono uppercase">{doc.category}</div>
+                        {doc.fileUrl && doc.fileUrl.startsWith('data:image') && (
+                          <div className="h-28 border bg-white rounded overflow-hidden p-1 flex items-center justify-center">
+                            <img src={doc.fileUrl} alt={doc.title} className="max-h-full max-w-full object-contain" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Loan Portfolio Summary */}
           <div>
