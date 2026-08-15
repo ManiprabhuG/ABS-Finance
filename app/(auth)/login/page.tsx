@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Lock, User, ArrowRight, Building, KeyRound, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -34,10 +34,6 @@ export default function LoginPage() {
     }
   };
 
-  const setRoleDemo = (u: string) => {
-    setUsername(u);
-    setPassword('admin123');
-  };
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
@@ -121,35 +117,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick RBAC Role Tester */}
-          <div className="mt-6 pt-5 border-t border-slate-800">
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 text-center">
-              Quick Role Test Fill
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setRoleDemo('admin')}
-                className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] rounded-lg text-center font-medium truncate"
-              >
-                Super Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleDemo('accountant')}
-                className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] rounded-lg text-center font-medium truncate"
-              >
-                Accountant
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleDemo('collector')}
-                className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] rounded-lg text-center font-medium truncate"
-              >
-                Collection Officer
-              </button>
-            </div>
-          </div>
         </div>
 
         <div className="text-center text-slate-500 text-xs mt-6 flex items-center justify-center space-x-2">
