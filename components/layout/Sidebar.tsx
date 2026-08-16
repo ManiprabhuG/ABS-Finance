@@ -19,6 +19,10 @@ import {
   AlertOctagon,
   Gavel,
   TrendingUp,
+  MapPin,
+  Lock,
+  MessageSquare,
+  Calculator,
 } from 'lucide-react';
 import { hasPermission } from '@/lib/auth';
 
@@ -34,6 +38,10 @@ export function Sidebar({ role = 'SUPER_ADMIN' }: SidebarProps) {
     { label: 'Customer Master', href: '/customers', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'COLLECTION_OFFICER', 'LOAN_OFFICER', 'VIEWER'] },
     { label: 'Loan Management', href: '/loans', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'LOAN_OFFICER', 'VIEWER'] },
     { label: 'Collection Entry', href: '/collections', icon: ReceiptText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'COLLECTION_OFFICER', 'VIEWER'] },
+    { label: 'Field Collections', href: '/field-collections', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN', 'COLLECTION_OFFICER', 'LOAN_OFFICER'] },
+    { label: 'Collateral Vault', href: '/collateral', icon: Lock, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'LOAN_OFFICER'] },
+    { label: 'Notifications & SMS', href: '/notifications', icon: MessageSquare, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'COLLECTION_OFFICER'] },
+    { label: 'Loan Foreclosure (OTS)', href: '/foreclosure', icon: Calculator, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'LOAN_OFFICER'] },
     { label: 'Finance & Accounts', href: '/finance', icon: Landmark, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'VIEWER'] },
     { label: 'Risk Engine', href: '/risk', icon: ShieldAlert, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'LOAN_OFFICER'] },
     { label: 'Fraud Alerts', href: '/fraud', icon: AlertOctagon, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },

@@ -46,11 +46,16 @@ model Customer {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  loans       Loan[]
-  collections Collection[]
-  documents   Document[]
-  riskLogs    CustomerRiskLog[]
-  fraudAlerts FraudAlert[]
+  loans            Loan[]
+  collections      Collection[]
+  documents        Document[]
+  riskLogs         CustomerRiskLog[]
+  fraudAlerts      FraudAlert[]
+  collaterals      CollateralVault[]
+  fieldCollections FieldCollection[]
+  notifications    NotificationLog[]
+  settlements      LoanSettlement[]
+  taxInvoices      TaxInvoice[]
 }
 
 model Loan {
@@ -77,14 +82,18 @@ model Loan {
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
-  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  mortgageDetail MortgageDetail?
-  collections    Collection[]
-  ledgerEntries  LedgerEntry[]
-  documents      Document[]
-  npaRecoveries  NPARecovery[]
-  legalCases     LegalCase[]
-  fraudAlerts    FraudAlert[]
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  mortgageDetail   MortgageDetail?
+  collections      Collection[]
+  ledgerEntries    LedgerEntry[]
+  documents        Document[]
+  npaRecoveries    NPARecovery[]
+  legalCases       LegalCase[]
+  fraudAlerts      FraudAlert[]
+  collaterals      CollateralVault[]
+  fieldCollections FieldCollection[]
+  notifications    NotificationLog[]
+  settlements      LoanSettlement[]
 }
 
 model MortgageDetail {
@@ -355,5 +364,125 @@ model UserDeviceLog {
   deviceType String   @default("DESKTOP")
   location   String?
   loginTime  DateTime @default(now())
+}
+
+model CollateralVault {
+  id               String    @id @default(uuid())
+  loanId           String
+  customerId       String?
+  assetType        String    // GOLD, PROPERTY_DEED, VEHICLE_RC, FIXED_DEPOSIT, OTHER
+  assetDescription String
+  itemCount        Int       @default(1)
+  grossWeight      Float?    // Grams for gold
+  netWeight        Float?    // Grams for gold
+  purityKarat      String?   // "22K", "24K"
+  estimatedValue   Float
+  marketValue      Float
+  vaultNumber      String    @default("VAULT-01")
+  lockerNumber     String    // e.g. "LOCKER-B-14"
+  packetNumber     String    @unique // e.g. "PKT-2026-089"
+  sealNumber       String    // e.g. "SEAL-99214"
+  status           String    @default("IN_VAULT") // IN_VAULT, AUDIT_INSPECTED, RELEASED, AUCTIONED
+  depositDate      DateTime  @default(now())
+  releaseDate      DateTime?
+  custodianName    String    @default("Senior Vault Officer")
+  custodyLogs      String?   @db.LongText // JSON tracking history
+  remarks          String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  loan     Loan?     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+}
+
+model FieldCollection {
+  id                String   @id @default(uuid())
+  receiptNo         String   @unique // e.g. "FLD-REC-1001"
+  officerId         String?
+  officerName       String
+  customerId        String
+  loanId            String
+  amount            Float
+  paymentMode       String   @default("CASH") // CASH, UPI_QR, CHEQUE
+  upiRef            String?
+  latitude          Float?
+  longitude         Float?
+  locationAddress   String?
+  customerSignature String?  @db.LongText
+  status            String   @default("SYNCED") // SYNCED, PENDING_AUDIT
+  notes             String?
+  collectedAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  loan     Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+}
+
+model NotificationLog {
+  id              String    @id @default(uuid())
+  customerId      String?
+  loanId          String?
+  recipientName   String
+  recipientMobile String
+  channel         String    @default("WHATSAPP") // WHATSAPP, SMS, EMAIL
+  templateType    String    // EMI_DUE_REMINDER, PAYMENT_RECEIPT, OVERDUE_PENALTY, LEGAL_NOTICE, OTS_OFFER
+  messageContent  String    @db.LongText
+  status          String    @default("DELIVERED") // SENT, DELIVERED, READ, FAILED
+  sentBy          String    @default("SYSTEM_AUTOBOT")
+  deliveredAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  loan     Loan?     @relation(fields: [loanId], references: [id], onDelete: SetNull)
+}
+
+model LoanSettlement {
+  id                    String    @id @default(uuid())
+  settlementNo          String    @unique // e.g. "OTS-2026-001"
+  loanId                String
+  customerId            String
+  principalOutstanding Float
+  interestAccrued       Float
+  penalCharges          Float
+  foreclosureFee        Float     @default(0)
+  waiverDiscount        Float     @default(0)
+  finalSettlementAmount Float
+  paymentMode           String    @default("BANK_TRANSFER") // CASH, BANK_TRANSFER, UPI, CHEQUE
+  bankAccountId         String?
+  referenceNo           String?
+  nocNumber             String?   @unique // e.g. "NOC-2026-0042"
+  nocIssuedDate         DateTime?
+  status                String    @default("COMPLETED") // DRAFT, PENDING_APPROVAL, COMPLETED
+  approvedBy            String?
+  remarks               String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  loan     Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model TaxInvoice {
+  id                 String   @id @default(uuid())
+  invoiceNumber      String   @unique // e.g. "INV-2026-001"
+  invoiceDate        DateTime @default(now())
+  customerId         String?
+  customerName       String
+  customerGstin      String?
+  placeOfSupply      String   @default("33-Tamil Nadu")
+  serviceType        String   // LOAN_PROCESSING_FEE, DOCUMENTATION_CHARGE, FORECLOSURE_CHARGE, PENAL_INTEREST, SERVICE_CHARGE
+  sacCode            String   @default("997119") // SAC code for Financial Services
+  taxableValue       Float
+  gstRate            Float    @default(18.0)
+  cgstAmount         Float    @default(0)
+  sgstAmount         Float    @default(0)
+  igstAmount         Float    @default(0)
+  totalInvoiceAmount Float
+  isMixedSupply      Boolean  @default(false)
+  supplyCategory     String   @default("REGULAR") // REGULAR, COMPOSITE, MIXED
+  status             String   @default("GENERATED") // GENERATED, FILED, CANCELLED
+  createdAt          DateTime @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 }
 
