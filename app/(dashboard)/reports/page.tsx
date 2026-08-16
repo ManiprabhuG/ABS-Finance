@@ -26,8 +26,9 @@ import {
   TrendingUp,
   Download,
   Filter,
+  FileDown,
 } from 'lucide-react';
-import { exportToExcel, formatCurrency, formatDate } from '@/lib/export-utils';
+import { exportToExcel, exportToCSV, formatCurrency, formatDate } from '@/lib/export-utils';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
 
 type CategoryType = 'FINANCIAL' | 'PORTFOLIO' | 'GST';
@@ -43,6 +44,19 @@ type ReportType =
   | 'GSTR1_OUTWARD'
   | 'ITC_REGISTER'
   | 'MIXED_SUPPLY';
+
+const PRINT_ROUTES: Record<ReportType, { title: string; route: string }> = {
+  TRIAL_BALANCE: { title: 'Trial Balance Sheet', route: '/print/trial-balance' },
+  PROFIT_LOSS: { title: 'Profit & Loss Statement', route: '/print/profit-loss' },
+  DAY_BOOK: { title: 'Daily Transaction Journal (Day Book)', route: '/print/day-book' },
+  DAILY_CASH_FLOW: { title: 'Statement of Cash Flows & Liquidity', route: '/print/cash-flow' },
+  LOAN_OUTSTANDING: { title: 'Loan Outstanding Portfolio Statement', route: '/print/loan-outstanding' },
+  PENDING_COLLECTION_LOCATION: { title: 'Location Pending Recovery Report', route: '/print/location-collections' },
+  MASTER_GST: { title: 'Statutory Master GST Summary Statement', route: '/print/master-gst' },
+  GSTR1_OUTWARD: { title: 'GSTR-1 Outward Taxable Supply Ledger', route: '/print/gstr1-outward' },
+  ITC_REGISTER: { title: 'Inward Input Tax Credit (ITC) Register', route: '/print/itc-register' },
+  MIXED_SUPPLY: { title: 'Mixed & Composite Supply Segregation Audit', route: '/print/mixed-supply' },
+};
 
 export default function ReportsPage() {
   const [activeCategory, setActiveCategory] = useState<CategoryType>('FINANCIAL');
@@ -84,28 +98,46 @@ export default function ReportsPage() {
     if (cat === 'GST') setReportType('MASTER_GST');
   };
 
-  const handleExportExcel = () => {
-    if (!data) return;
-    const dateStamp = new Date().toISOString().slice(0, 10);
+  // Quick Date Preset Helpers
+  const applyDatePreset = (preset: 'TODAY' | 'THIS_MONTH' | 'FY' | 'ALL') => {
+    const now = new Date();
+    if (preset === 'TODAY') {
+      const todayStr = now.toISOString().slice(0, 10);
+      setFromDate(todayStr);
+      setToDate(todayStr);
+    } else if (preset === 'THIS_MONTH') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      setFromDate(firstDay);
+      setToDate(lastDay);
+    } else if (preset === 'FY') {
+      setFromDate('2026-04-01');
+      setToDate('2027-03-31');
+    } else if (preset === 'ALL') {
+      setFromDate('');
+      setToDate('');
+    }
+  };
 
+  // Construct structured rows for Exporting (Excel & CSV)
+  const getExportRows = () => {
+    if (!data) return [];
     if (reportType === 'TRIAL_BALANCE') {
-      const rows = [
+      return [
         { Account: 'Loan Assets (Total Outstanding)', Amount: data.summary?.totalOutstanding, Type: 'Debit' },
         { Account: 'Cash In Hand', Amount: data.cashInHand, Type: 'Debit' },
         { Account: 'Bank Balances', Amount: data.summary?.totalBankBalance, Type: 'Debit' },
         { Account: 'Interest & Direct Fee Income', Amount: data.summary?.totalIncome, Type: 'Credit' },
         { Account: 'Operational Expenses', Amount: data.summary?.totalExpense, Type: 'Debit' },
       ];
-      exportToExcel(rows, `Trial_Balance_${dateStamp}`);
     } else if (reportType === 'DAILY_CASH_FLOW') {
-      const rows = [
+      return [
         { Metric: 'Opening Cash Balance', Amount: data.openingCash },
         { Metric: 'Total Cash Collections Received', Amount: data.totalCashInflow },
         { Metric: 'Total Cash Disbursements & Expenses', Amount: data.totalCashOutflow },
         { Metric: 'Net Cash Flow for Period', Amount: data.netCashMovement },
         { Metric: 'Closing Physical Cash in Hand', Amount: data.closingCash },
       ];
-      exportToExcel(rows, `Daily_Cash_Flow_Report_${dateStamp}`);
     } else if (reportType === 'PENDING_COLLECTION_LOCATION') {
       const rows: any[] = [];
       data.locations?.forEach((loc: any) => {
@@ -123,9 +155,9 @@ export default function ReportsPage() {
           });
         });
       });
-      exportToExcel(rows, `Pending_Collections_By_Location_${dateStamp}`);
+      return rows;
     } else if (reportType === 'MASTER_GST') {
-      const rows = [
+      return [
         { Head: 'Company GSTIN', Value: data.gstin },
         { Head: 'Gross Aggregate Turnover', Value: data.totalTurnover },
         { Head: 'Exempt Turnover (Interest Income)', Value: data.exemptTurnover },
@@ -134,9 +166,8 @@ export default function ReportsPage() {
         { Head: 'Eligible Inward ITC (50% NBFC Rule)', Value: data.inputTaxCredit?.eligibleItc },
         { Head: 'Net GST Payable to Govt', Value: data.netGstPayable },
       ];
-      exportToExcel(rows, `Master_GST_Summary_${dateStamp}`);
     } else if (reportType === 'GSTR1_OUTWARD') {
-      const rows = data.items?.map((i: any) => ({
+      return data.items?.map((i: any) => ({
         'Invoice No': i.invoiceNo,
         Date: formatDate(i.date),
         Customer: i.customerName,
@@ -149,10 +180,9 @@ export default function ReportsPage() {
         'CGST (9%)': i.cgst,
         'SGST (9%)': i.sgst,
         'Total Invoice Value': i.totalAmount,
-      }));
-      exportToExcel(rows || [], `GSTR1_Outward_Ledger_${dateStamp}`);
+      })) || [];
     } else if (reportType === 'ITC_REGISTER') {
-      const rows = data.items?.map((i: any) => ({
+      return data.items?.map((i: any) => ({
         'Voucher No': i.voucherNo,
         Date: formatDate(i.date),
         Vendor: i.vendorName,
@@ -163,10 +193,9 @@ export default function ReportsPage() {
         'Eligibility Rule': i.itcEligibility,
         'Eligible ITC (50%)': i.eligibleItc,
         'Ineligible ITC (50%)': i.ineligibleItc,
-      }));
-      exportToExcel(rows || [], `ITC_Register_Sec17_4_${dateStamp}`);
+      })) || [];
     } else if (reportType === 'MIXED_SUPPLY') {
-      const rows = data.logs?.map((l: any) => ({
+      return data.logs?.map((l: any) => ({
         'Bundle ID': l.bundleId,
         'Loan No': l.loanNumber,
         Customer: l.customerName,
@@ -176,63 +205,119 @@ export default function ReportsPage() {
         'Total GST (18%)': l.totalGstLevied,
         Classification: l.supplyClassification,
         Status: l.complianceStatus,
-      }));
-      exportToExcel(rows || [], `Mixed_Supply_Segregation_Log_${dateStamp}`);
+      })) || [];
     } else if (reportType === 'LOAN_OUTSTANDING') {
-      const rows = data.loans?.map((l: any) => ({
+      return data.loans?.map((l: any) => ({
         'Loan No': l.loanNumber,
         Customer: l.customer?.name,
         Type: l.loanType,
         Principal: l.principalAmount,
         Outstanding: l.outstandingBalance,
         Status: l.status,
-      }));
-      exportToExcel(rows || [], `Loan_Outstanding_Report_${dateStamp}`);
+      })) || [];
+    } else if (reportType === 'PROFIT_LOSS') {
+      return [
+        { Category: 'Total Operating Income', Amount: data.summary?.totalIncome },
+        { Category: 'Total Operating Expenses', Amount: data.summary?.totalExpense },
+        { Category: 'Net Financial Operating Profit', Amount: data.summary?.netProfit },
+      ];
+    } else if (reportType === 'DAY_BOOK') {
+      return data.ledgerEntries?.map((e: any) => ({
+        'Ref ID': e.ledgerId,
+        Date: formatDate(e.date),
+        Particulars: e.remarks,
+        Debit: e.debit,
+        Credit: e.credit,
+      })) || [];
     }
+    return [];
+  };
+
+  const handleExportExcel = () => {
+    const rows = getExportRows();
+    if (rows.length === 0) return;
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    exportToExcel(rows, `${reportType}_Report_${dateStamp}`);
+  };
+
+  const handleExportCSV = () => {
+    const rows = getExportRows();
+    if (rows.length === 0) return;
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    exportToCSV(rows, `${reportType}_Report_${dateStamp}`);
+  };
+
+  const handleOpenPrintPreview = () => {
+    const config = PRINT_ROUTES[reportType] || { title: 'Report Statement', route: '/print/cash-flow' };
+    let printUrl = config.route;
+    const params = new URLSearchParams();
+    if (fromDate) params.append('from', fromDate);
+    if (toDate) params.append('to', toDate);
+    const qs = params.toString();
+    if (qs) printUrl += `?${qs}`;
+
+    setPrintModal({
+      isOpen: true,
+      title: config.title,
+      url: printUrl,
+    });
   };
 
   return (
     <div className="space-y-6 p-4 sm:p-6 max-w-7xl mx-auto">
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl">
-        <div>
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
-              <BarChart3 className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">
-                Reports & Financial Analytics Hub
-              </h1>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Statutory Financial Books, Portfolio Field Audits, and Automated GST Returns.
-              </p>
-            </div>
+        <div className="flex items-center space-x-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+            <BarChart3 className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              Reports & Financial Analytics Hub
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Statutory Financial Books, Portfolio Field Audits, and Automated GST Returns.
+            </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Action Controls for Current Report */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={fetchReports}
             disabled={loading}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition flex items-center space-x-1.5"
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition flex items-center space-x-1.5"
+            title="Reload Report Data"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold rounded-xl border border-slate-700 transition flex items-center space-x-1.5 shadow-sm"
+            title="Download CSV file"
+          >
+            <FileDown className="w-4 h-4 text-cyan-400" />
+            <span>Export CSV</span>
+          </button>
+
           <button
             onClick={handleExportExcel}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition flex items-center space-x-1.5"
+            title="Download Excel Spreadsheet (.xlsx)"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>Export to Excel</span>
+            <span>Export Excel</span>
           </button>
+
           <button
-            onClick={() => setPrintModal({ isOpen: true, title: 'Cash Flow Statement', url: '/print/cash-flow' })}
-            className="px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-brand-600/20 transition flex items-center space-x-1.5"
+            onClick={handleOpenPrintPreview}
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
+            title="Open Clean Print Preview & Save as PDF"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print Report</span>
+            <Printer className="w-4 h-4" />
+            <span>Print & PDF</span>
           </button>
         </div>
       </div>
@@ -288,17 +373,17 @@ export default function ReportsPage() {
         </button>
       </div>
 
-      {/* Sub-Report Tabs and Date Filter Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 shadow-sm">
-        {/* Sub tabs */}
-        <div className="flex flex-wrap gap-2">
+      {/* Sub-Report Tabs and Enhanced Date Range Filter Bar */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm space-y-4">
+        {/* Sub tabs switcher */}
+        <div className="flex flex-wrap gap-2 pb-3 border-b border-slate-800/80">
           {activeCategory === 'FINANCIAL' && (
             <>
               {[
-                { id: 'TRIAL_BALANCE', label: 'Trial Balance' },
-                { id: 'PROFIT_LOSS', label: 'Profit & Loss' },
-                { id: 'DAY_BOOK', label: 'Day Book' },
-                { id: 'DAILY_CASH_FLOW', label: 'Daily Cash Flow Report' },
+                { id: 'TRIAL_BALANCE', label: 'Trial Balance Sheet' },
+                { id: 'PROFIT_LOSS', label: 'Profit & Loss Statement' },
+                { id: 'DAY_BOOK', label: 'Day Book Journal' },
+                { id: 'DAILY_CASH_FLOW', label: 'Daily Cash Flow Statement' },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -360,38 +445,72 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* Date Filter */}
-        <div className="flex items-center space-x-2 text-xs">
-          <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-400">From:</span>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="bg-transparent text-slate-200 border-none outline-none cursor-pointer"
-            />
-          </div>
-          <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-            <span className="text-slate-400">To:</span>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="bg-transparent text-slate-200 border-none outline-none cursor-pointer"
-            />
-          </div>
-          {(fromDate || toDate) && (
+        {/* Date Filter & Preset Controls */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 pt-1">
+          {/* Quick presets */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+            <span className="text-slate-400 mr-1 flex items-center gap-1 text-[11px] uppercase">
+              <Clock className="w-3.5 h-3.5 text-brand-400" /> Quick Date Range:
+            </span>
             <button
-              onClick={() => {
-                setFromDate('');
-                setToDate('');
-              }}
-              className="px-2 py-1.5 text-rose-400 hover:text-rose-300 font-semibold"
+              onClick={() => applyDatePreset('TODAY')}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
             >
-              Clear
+              Today
             </button>
-          )}
+            <button
+              onClick={() => applyDatePreset('THIS_MONTH')}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+            >
+              This Month
+            </button>
+            <button
+              onClick={() => applyDatePreset('FY')}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+            >
+              FY 2026-27
+            </button>
+            <button
+              onClick={() => applyDatePreset('ALL')}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+            >
+              All Time
+            </button>
+          </div>
+
+          {/* Exact Date Pickers */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
+              <Calendar className="w-3.5 h-3.5 text-brand-400" />
+              <span className="text-slate-400 font-medium">From:</span>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="bg-transparent text-white font-mono text-xs border-none outline-none cursor-pointer"
+              />
+            </div>
+            <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
+              <span className="text-slate-400 font-medium">To:</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="bg-transparent text-white font-mono text-xs border-none outline-none cursor-pointer"
+              />
+            </div>
+            {(fromDate || toDate) && (
+              <button
+                onClick={() => {
+                  setFromDate('');
+                  setToDate('');
+                }}
+                className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl font-semibold"
+              >
+                Reset Dates
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -399,7 +518,7 @@ export default function ReportsPage() {
       {loading ? (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center text-slate-400">
           <RefreshCw className="w-8 h-8 animate-spin mx-auto text-brand-500 mb-3" />
-          <p className="text-sm font-semibold">Generating Real-Time Report Data...</p>
+          <p className="text-sm font-semibold">Loading Report Calculations...</p>
         </div>
       ) : (
         <>
@@ -437,7 +556,7 @@ export default function ReportsPage() {
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                  <div className="text-xs text-cyan-400 font-medium">Net Daily Movement</div>
+                  <div className="text-xs text-cyan-400 font-medium">Net Movement</div>
                   <div className={`text-2xl font-black mt-2 ${(data?.netCashMovement || 0) >= 0 ? 'text-cyan-400' : 'text-rose-400'}`}>
                     {formatCurrency(data?.netCashMovement || 0)}
                   </div>
@@ -451,7 +570,7 @@ export default function ReportsPage() {
                   <div className="text-2xl font-black text-brand-300 mt-2">
                     {formatCurrency(data?.closingCash || 0)}
                   </div>
-                  <div className="text-[10px] text-brand-400/80 mt-1">Verified Master Balance</div>
+                  <div className="text-[10px] text-brand-400/80 mt-1">Verified Master Float</div>
                 </div>
               </div>
 
@@ -531,7 +650,6 @@ export default function ReportsPage() {
           {/* 2. PENDING COLLECTION BY LOCATION / BRANCH */}
           {reportType === 'PENDING_COLLECTION_LOCATION' && (
             <div className="space-y-6">
-              {/* Overview Metric */}
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
                 <div>
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -553,7 +671,6 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {/* Location Groups */}
               <div className="space-y-4">
                 {data?.locations?.map((loc: any, idx: number) => (
                   <div key={idx} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
@@ -638,7 +755,6 @@ export default function ReportsPage() {
           {/* 3. MASTER GST SUMMARY */}
           {reportType === 'MASTER_GST' && (
             <div className="space-y-6">
-              {/* GST Header Card */}
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm">
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
                   <div>
@@ -658,7 +774,6 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                {/* Turnover Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
                   <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800">
                     <div className="text-xs text-slate-400">1. Total Aggregate Turnover</div>
@@ -693,12 +808,11 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                {/* Net Tax Offset Calculation */}
                 <div className="mt-6 p-5 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-amber-500/30 flex flex-col md:flex-row items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="text-xs font-bold text-slate-300">Section 17(4) Eligible Input Tax Credit (ITC) Offset:</div>
                     <div className="text-xs text-slate-400">
-                      Gross Inward GST: {formatCurrency(data?.inputTaxCredit?.grossInwardGst || 0)} (50% NBFC Special Apportionment: <span className="text-emerald-400 font-semibold">-{formatCurrency(data?.inputTaxCredit?.eligibleItc || 0)}</span>)
+                      Gross Inward GST: {formatCurrency(data?.inputTaxCredit?.grossInwardGst || 0)} (50% NBFC Apportionment: <span className="text-emerald-400 font-semibold">-{formatCurrency(data?.inputTaxCredit?.eligibleItc || 0)}</span>)
                     </div>
                   </div>
                   <div className="text-right">

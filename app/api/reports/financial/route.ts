@@ -9,8 +9,18 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const reportType = searchParams.get('type') || 'TRIAL_BALANCE';
-    const fromDate = searchParams.get('from') ? new Date(searchParams.get('from')!) : undefined;
-    const toDate = searchParams.get('to') ? new Date(searchParams.get('to')!) : undefined;
+    
+    let fromDate: Date | undefined;
+    let toDate: Date | undefined;
+
+    if (searchParams.get('from')) {
+      fromDate = new Date(searchParams.get('from')!);
+      fromDate.setHours(0, 0, 0, 0);
+    }
+    if (searchParams.get('to')) {
+      toDate = new Date(searchParams.get('to')!);
+      toDate.setHours(23, 59, 59, 999);
+    }
 
     const dateFilter = fromDate || toDate
       ? {
@@ -32,7 +42,10 @@ export async function GET(request: Request) {
       db.loan.aggregate({
         _sum: { principalAmount: true, outstandingBalance: true, totalInterestAmount: true },
         _count: { id: true },
-        where: { status: { not: 'PENDING' } },
+        where: {
+          status: { not: 'PENDING' },
+          ...(dateFilter && { loanDate: dateFilter }),
+        },
       }),
       db.collection.aggregate({
         _sum: { amountReceived: true, interestPaid: true, principalPaid: true, penaltyPaid: true },
@@ -275,6 +288,7 @@ export async function GET(request: Request) {
     } else if (reportType === 'GSTR1_OUTWARD') {
       const [taxInvoices, incomes, penaltyCollections] = await Promise.all([
         db.taxInvoice.findMany({
+          where: dateFilter ? { invoiceDate: dateFilter } : undefined,
           orderBy: { invoiceDate: 'desc' },
           take: 200,
         }),
@@ -421,6 +435,7 @@ export async function GET(request: Request) {
         where: {
           loanType: { in: ['MORTGAGE', 'CUSTOM'] },
           status: { not: 'PENDING' },
+          ...(dateFilter && { loanDate: dateFilter }),
         },
         include: {
           customer: true,
@@ -465,7 +480,10 @@ export async function GET(request: Request) {
       };
     } else if (reportType === 'LOAN_OUTSTANDING') {
       const loans = await db.loan.findMany({
-        where: { status: { in: ['ACTIVE', 'OVERDUE'] } },
+        where: {
+          status: { in: ['ACTIVE', 'OVERDUE'] },
+          ...(dateFilter && { loanDate: dateFilter }),
+        },
         include: { customer: { select: { name: true, mobile: true } } },
         orderBy: { createdAt: 'desc' },
         take: 200,
