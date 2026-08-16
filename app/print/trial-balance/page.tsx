@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { PrintHeader } from '@/components/print/PrintHeader';
 import { PrintFooter } from '@/components/print/PrintFooter';
 import { PrintToolbar } from '@/components/print/PrintToolbar';
-import { formatCurrency } from '@/lib/export-utils';
+import { formatCurrency, formatDate } from '@/lib/export-utils';
 
 export const revalidate = 0;
 
@@ -65,7 +65,7 @@ export default async function TrialBalancePrintPage({ searchParams }: { searchPa
 
         <div className="space-y-6 text-xs">
           <div className="p-3 bg-slate-50 border border-slate-300 rounded text-slate-700 flex justify-between font-mono">
-            <span>Period: {params.from || 'Financial Year Start'} to {params.to || 'Present'}</span>
+            <span>Period: {params.from ? formatDate(params.from) : 'All Recorded Transactions'} to {params.to ? formatDate(params.to) : 'Present Date'}</span>
             <span>Accounting Standard: Double-Entry Accrual System</span>
           </div>
 

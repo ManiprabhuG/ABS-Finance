@@ -7,11 +7,24 @@ import { formatCurrency } from '@/lib/export-utils';
 
 export const revalidate = 0;
 
-export default async function CashFlowReportPrintPage() {
+export default async function CashFlowReportPrintPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+  const params = await searchParams;
+  let fromDate: Date | undefined;
+  let toDate: Date | undefined;
+  if (params.from) {
+    fromDate = new Date(params.from);
+    fromDate.setHours(0, 0, 0, 0);
+  }
+  if (params.to) {
+    toDate = new Date(params.to);
+    toDate.setHours(23, 59, 59, 999);
+  }
+  const dateFilter = fromDate || toDate ? { ...(fromDate && { gte: fromDate }), ...(toDate && { lte: toDate }) } : undefined;
+
   const [incomes, expenses, collections, cashAccount, bankAccounts, settings] = await Promise.all([
-    db.income.findMany({}),
-    db.expense.findMany({}),
-    db.collection.findMany({}),
+    db.income.findMany({ where: dateFilter ? { date: dateFilter } : undefined }),
+    db.expense.findMany({ where: dateFilter ? { date: dateFilter } : undefined }),
+    db.collection.findMany({ where: dateFilter ? { collectionDate: dateFilter } : undefined }),
     db.cashAccount.findUnique({ where: { id: 'cash-master' } }),
     db.bankAccount.findMany({}),
     db.systemSettings.findFirst(),
@@ -40,6 +53,10 @@ export default async function CashFlowReportPrintPage() {
         />
 
         <div className="space-y-6 text-xs">
+          <div className="p-3 bg-slate-50 border border-slate-300 rounded text-slate-700 flex justify-between font-mono">
+            <span>Period: {params.from || 'All Recorded'} to {params.to || 'Present'}</span>
+            <span>Liquidity Accounting Standard</span>
+          </div>
           {/* Section 1: Inflows / Income Heads */}
           <div>
             <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 border-b border-slate-300 pb-1 mb-2">

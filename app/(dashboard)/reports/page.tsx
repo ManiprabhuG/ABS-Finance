@@ -27,6 +27,9 @@ import {
   Download,
   Filter,
   FileDown,
+  Search,
+  RotateCcw,
+  Check,
 } from 'lucide-react';
 import { exportToExcel, exportToCSV, formatCurrency, formatDate } from '@/lib/export-utils';
 import { PrintPreviewModal } from '@/components/print/PrintPreviewModal';
@@ -61,8 +64,15 @@ const PRINT_ROUTES: Record<ReportType, { title: string; route: string }> = {
 export default function ReportsPage() {
   const [activeCategory, setActiveCategory] = useState<CategoryType>('FINANCIAL');
   const [reportType, setReportType] = useState<ReportType>('TRIAL_BALANCE');
+  
+  // Input fields for manual editing
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  
+  // Applied filters sent to the API
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo, setAppliedTo] = useState('');
+  
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [printModal, setPrintModal] = useState<{ isOpen: boolean; title: string; url: string }>({
@@ -75,8 +85,8 @@ export default function ReportsPage() {
     setLoading(true);
     try {
       let url = `/api/reports/financial?type=${reportType}`;
-      if (fromDate) url += `&from=${fromDate}`;
-      if (toDate) url += `&to=${toDate}`;
+      if (appliedFrom) url += `&from=${appliedFrom}`;
+      if (appliedTo) url += `&to=${appliedTo}`;
       const res = await fetch(url);
       const result = await res.json();
       setData(result);
@@ -89,7 +99,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchReports();
-  }, [reportType, fromDate, toDate]);
+  }, [reportType, appliedFrom, appliedTo]);
 
   const handleCategoryChange = (cat: CategoryType) => {
     setActiveCategory(cat);
@@ -98,25 +108,61 @@ export default function ReportsPage() {
     if (cat === 'GST') setReportType('MASTER_GST');
   };
 
+  // Helper to format local dates in YYYY-MM-DD
+  const formatLocalYMD = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Quick Date Preset Helpers
   const applyDatePreset = (preset: 'TODAY' | 'THIS_MONTH' | 'FY' | 'ALL') => {
     const now = new Date();
     if (preset === 'TODAY') {
-      const todayStr = now.toISOString().slice(0, 10);
+      const todayStr = formatLocalYMD(now);
       setFromDate(todayStr);
       setToDate(todayStr);
+      setAppliedFrom(todayStr);
+      setAppliedTo(todayStr);
     } else if (preset === 'THIS_MONTH') {
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const firstDay = formatLocalYMD(new Date(now.getFullYear(), now.getMonth(), 1));
+      const lastDay = formatLocalYMD(new Date(now.getFullYear(), now.getMonth() + 1, 0));
       setFromDate(firstDay);
       setToDate(lastDay);
+      setAppliedFrom(firstDay);
+      setAppliedTo(lastDay);
     } else if (preset === 'FY') {
-      setFromDate('2026-04-01');
-      setToDate('2027-03-31');
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+      const fyEndYear = fyStartYear + 1;
+      const start = `${fyStartYear}-04-01`;
+      const end = `${fyEndYear}-03-31`;
+      setFromDate(start);
+      setToDate(end);
+      setAppliedFrom(start);
+      setAppliedTo(end);
     } else if (preset === 'ALL') {
       setFromDate('');
       setToDate('');
+      setAppliedFrom('');
+      setAppliedTo('');
     }
+  };
+
+  // Manual Filter Apply
+  const handleApplyFilter = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAppliedFrom(fromDate);
+    setAppliedTo(toDate);
+  };
+
+  const handleResetFilter = () => {
+    setFromDate('');
+    setToDate('');
+    setAppliedFrom('');
+    setAppliedTo('');
   };
 
   // Construct structured rows for Exporting (Excel & CSV)
@@ -251,8 +297,8 @@ export default function ReportsPage() {
     const config = PRINT_ROUTES[reportType] || { title: 'Report Statement', route: '/print/cash-flow' };
     let printUrl = config.route;
     const params = new URLSearchParams();
-    if (fromDate) params.append('from', fromDate);
-    if (toDate) params.append('to', toDate);
+    if (appliedFrom) params.append('from', appliedFrom);
+    if (appliedTo) params.append('to', appliedTo);
     const qs = params.toString();
     if (qs) printUrl += `?${qs}`;
 
@@ -454,64 +500,85 @@ export default function ReportsPage() {
             </span>
             <button
               onClick={() => applyDatePreset('TODAY')}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
             >
               Today
             </button>
             <button
               onClick={() => applyDatePreset('THIS_MONTH')}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
             >
               This Month
             </button>
             <button
               onClick={() => applyDatePreset('FY')}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
             >
-              FY 2026-27
+              Current FY
             </button>
             <button
               onClick={() => applyDatePreset('ALL')}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
             >
               All Time
             </button>
           </div>
 
-          {/* Exact Date Pickers */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
-              <Calendar className="w-3.5 h-3.5 text-brand-400" />
-              <span className="text-slate-400 font-medium">From:</span>
+          {/* Manual Date Form */}
+          <form onSubmit={handleApplyFilter} className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700 focus-within:border-brand-500">
+              <Calendar className="w-4 h-4 text-brand-400" />
+              <span className="text-slate-400 font-medium text-xs">From:</span>
               <input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="bg-transparent text-white font-mono text-xs border-none outline-none cursor-pointer"
+                className="bg-transparent text-white font-mono text-xs border-none outline-none cursor-pointer [color-scheme:dark]"
               />
             </div>
-            <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
-              <span className="text-slate-400 font-medium">To:</span>
+
+            <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700 focus-within:border-brand-500">
+              <Calendar className="w-4 h-4 text-brand-400" />
+              <span className="text-slate-400 font-medium text-xs">To:</span>
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="bg-transparent text-white font-mono text-xs border-none outline-none cursor-pointer"
+                className="bg-transparent text-white font-mono text-xs border-none outline-none cursor-pointer [color-scheme:dark]"
               />
             </div>
-            {(fromDate || toDate) && (
+
+            <button
+              type="submit"
+              className="px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl shadow-sm transition flex items-center space-x-1"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Apply Filter</span>
+            </button>
+
+            {(appliedFrom || appliedTo || fromDate || toDate) && (
               <button
-                onClick={() => {
-                  setFromDate('');
-                  setToDate('');
-                }}
-                className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl font-semibold"
+                type="button"
+                onClick={handleResetFilter}
+                className="px-3 py-2 bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-500/30 rounded-xl font-semibold transition flex items-center space-x-1"
+                title="Reset Date Filters"
               >
-                Reset Dates
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
               </button>
             )}
-          </div>
+          </form>
         </div>
+
+        {/* Active Filter Indicator Badge */}
+        {(appliedFrom || appliedTo) && (
+          <div className="pt-2 flex items-center gap-2 text-xs font-mono">
+            <span className="text-slate-400 font-sans">Active Filter:</span>
+            <span className="px-2.5 py-0.5 rounded-full bg-brand-500/15 text-brand-300 border border-brand-500/30">
+              {appliedFrom ? formatDate(appliedFrom) : 'Beginning'} &rarr; {appliedTo ? formatDate(appliedTo) : 'Present Date'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* REPORT CONTENT VIEWS */}
